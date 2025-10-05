@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strings"
 )
 
 // OllamaClient клиент для работы с локальным Ollama
@@ -71,7 +73,9 @@ func (c *OllamaClient) Generate(prompt string) (string, error) {
 		return "", fmt.Errorf("ошибка парсинга JSON: %w", err)
 	}
 
-	return ollamaResp.Response, nil
+	// Очищаем ответ от блоков размышлений
+	response := c.cleanResponse(ollamaResp.Response)
+	return response, nil
 }
 
 // IsAvailable проверяет доступность Ollama
@@ -98,4 +102,20 @@ func (c *OllamaClient) TestConnection() error {
 
 	fmt.Printf("✅ Ollama работает! Ответ: %s\n", response)
 	return nil
+}
+
+// cleanResponse очищает ответ от блоков размышлений и лишнего текста
+func (c *OllamaClient) cleanResponse(response string) string {
+	// Удаляем блоки <think>...</think>
+	thinkRegex := regexp.MustCompile(`<think>.*?</think>`)
+	cleaned := thinkRegex.ReplaceAllString(response, "")
+	
+	// Удаляем лишние пробелы и переносы строк в начале и конце
+	cleaned = strings.TrimSpace(cleaned)
+	
+	// Удаляем множественные пустые строки
+	multipleNewlines := regexp.MustCompile(`\n\s*\n\s*\n`)
+	cleaned = multipleNewlines.ReplaceAllString(cleaned, "\n\n")
+	
+	return cleaned
 }

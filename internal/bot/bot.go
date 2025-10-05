@@ -155,7 +155,7 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 	context := b.history.GetRecentContext(userID, 5)
 	
 	// Формируем промпт с контекстом
-	prompt := "Ты полезный ИИ-ассистент по имени Lovifyy Bot. Отвечай на русском языке, будь дружелюбным и полезным.\n\n"
+	prompt := "Ты полезный ИИ-ассистент по имени Lovifyy Bot. Отвечай на русском языке, будь дружелюбным и полезным. ВАЖНО: Отвечай только финальным ответом, без показа процесса размышления или блоков <think>.\n\n"
 	if context != "" {
 		prompt += context + "\n"
 	}
