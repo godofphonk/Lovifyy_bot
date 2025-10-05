@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -111,6 +110,22 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 
 // getAIResponse получает ответ от OpenAI
 func (b *Bot) getAIResponse(userMessage string) (string, error) {
+	// Временная заглушка пока не решена проблема с квотой OpenAI
+	if strings.Contains(strings.ToLower(userMessage), "привет") {
+		return "Привет! 👋 Как дела?", nil
+	}
+	if strings.Contains(strings.ToLower(userMessage), "как дела") {
+		return "У меня все отлично! А у тебя как?", nil
+	}
+	if strings.Contains(strings.ToLower(userMessage), "что умеешь") {
+		return "Я умею отвечать на сообщения! Пока работаю в тестовом режиме без ИИ.", nil
+	}
+	
+	// Временный ответ для всех остальных сообщений
+	return fmt.Sprintf("Получил твое сообщение: \"%s\"\n\n🤖 Сейчас работаю в тестовом режиме. ИИ временно недоступен из-за превышения квоты OpenAI. Пополните баланс на platform.openai.com для полноценной работы!", userMessage), nil
+
+	// Закомментированный код для OpenAI (раскомментировать после пополнения баланса)
+	/*
 	req := openai.ChatCompletionRequest{
 		Model: openai.GPT3Dot5Turbo,
 		Messages: []openai.ChatCompletionMessage{
@@ -138,6 +153,7 @@ func (b *Bot) getAIResponse(userMessage string) (string, error) {
 	}
 
 	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
+	*/
 }
 
 // sendMessage отправляет сообщение пользователю
