@@ -51,16 +51,31 @@ cp .env.example .env
 2. Создайте новый API ключ
 3. Скопируйте ключ в `.env`
 
-### 4. Запуск бота
+### 4. Установка и запуск Ollama
 
+Скачайте и установите Ollama:
+- Перейдите на https://ollama.com/download/windows
+- Скачайте и установите OllamaSetup.exe
+- Запустите Ollama
+- Загрузите модель: `ollama pull qwen3:8b`
+
+### 5. Запуск бота
+
+**Простой способ:**
 ```bash
-go run .
+# Запуск через скрипт (рекомендуется)
+scripts\run.bat
 ```
 
-Или соберите исполняемый файл:
+**Ручной запуск:**
 ```bash
-go build -o lovifyy_bot
-./lovifyy_bot
+go run cmd/main.go
+```
+
+**Сборка исполняемого файла:**
+```bash
+go build -o lovifyy_bot.exe cmd/main.go
+./lovifyy_bot.exe
 ```
 
 ## Использование
@@ -77,12 +92,27 @@ go build -o lovifyy_bot
 
 ```
 Lovifyy_bot/
-├── main.go          # Точка входа в приложение
-├── bot.go           # Основная логика бота
-├── go.mod           # Зависимости Go
-├── .env.example     # Пример конфигурации
-├── .gitignore       # Игнорируемые файлы
-└── README.md        # Документация
+├── cmd/
+│   └── main.go              # Точка входа в приложение
+├── internal/
+│   ├── bot/
+│   │   └── bot.go           # Основная логика Telegram бота
+│   ├── ai/
+│   │   └── ollama.go        # Клиент для работы с Ollama
+│   └── history/
+│       └── manager.go       # Управление историей сообщений
+├── tests/
+│   └── ollama_test.go       # Тесты для ИИ
+├── configs/
+│   └── .env.example         # Пример конфигурации
+├── scripts/
+│   ├── run.bat              # Скрипт запуска бота
+│   └── test.bat             # Скрипт тестирования
+├── chat_history/            # Папка с историей пользователей (создается автоматически)
+├── go.mod                   # Зависимости Go
+├── .env                     # Конфигурация (не в Git)
+├── .gitignore              # Игнорируемые файлы
+└── README.md               # Документация
 ```
 
 ## Развертывание на сервере

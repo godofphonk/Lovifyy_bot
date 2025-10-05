@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"Lovifyy_bot/internal/bot"
 	"github.com/joho/godotenv"
 )
 
@@ -20,14 +21,10 @@ func main() {
 		log.Fatal("TELEGRAM_BOT_TOKEN не установлен")
 	}
 
-	// Получаем API ключ OpenAI
-	openaiAPIKey := os.Getenv("OPENAI_API_KEY")
-	if openaiAPIKey == "" {
-		log.Fatal("OPENAI_API_KEY не установлен")
-	}
-
 	// Создаем и запускаем бота
-	bot := NewBot(botToken, openaiAPIKey)
-	log.Println("Бот запущен...")
-	bot.Start()
+	telegramBot := bot.NewBot(botToken)
+	log.Println("🚀 Lovifyy Bot запущен...")
+	log.Println("💾 История сохраняется для каждого пользователя")
+	log.Println("🤖 Используется локальная модель: Qwen 3:8B")
+	telegramBot.Start()
 }
