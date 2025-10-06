@@ -1,14 +1,15 @@
-package main
+package tests
 
 import (
 	"fmt"
+	"testing"
 	"Lovifyy_bot/internal/ai"
 )
 
-func main() {
+func TestResponseCleaning(t *testing.T) {
 	fmt.Println("🧪 Тестируем очистку ответов от <think> блоков...")
 	
-	client := ai.NewOllamaClient("qwen3:8b")
+	client := ai.NewOllamaClient("gemma3:1b")
 	
 	// Проверяем подключение
 	if err := client.TestConnection(); err != nil {
@@ -20,7 +21,7 @@ func main() {
 	fmt.Println("\n🤖 Тестируем простой вопрос...")
 	response, err := client.Generate("Скажи просто 'Привет!' без лишних слов")
 	if err != nil {
-		fmt.Printf("❌ Ошибка: %v\n", err)
+		t.Errorf("❌ Ошибка: %v", err)
 		return
 	}
 	
@@ -30,6 +31,6 @@ func main() {
 	if len(response) < 200 && response != "" {
 		fmt.Println("✅ Ответ выглядит чистым!")
 	} else {
-		fmt.Println("⚠️ Ответ все еще содержит лишний текст")
+		t.Errorf("⚠️ Ответ все еще содержит лишний текст: длина %d", len(response))
 	}
 }

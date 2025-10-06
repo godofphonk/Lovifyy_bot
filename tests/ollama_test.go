@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"log"
 	"testing"
 
 	"Lovifyy_bot/internal/ai"
@@ -11,8 +10,8 @@ import (
 func TestOllamaConnection(t *testing.T) {
 	fmt.Println("🧪 Тестируем локальный Ollama...")
 	
-	// Создаем клиент для модели Qwen
-	client := ai.NewOllamaClient("qwen3:8b")
+	// Создаем клиент для легкой модели
+	client := ai.NewOllamaClient("gemma3:1b")
 	
 	// Проверяем доступность
 	fmt.Println("🔍 Проверяем подключение к Ollama...")
@@ -50,18 +49,19 @@ func TestOllamaConnection(t *testing.T) {
 	fmt.Println("\n✅ Тест завершен успешно!")
 }
 
-func TestOllamaManual() {
+func TestOllamaManual(t *testing.T) {
 	fmt.Println("🧪 Ручной тест Ollama...")
 	
-	client := ai.NewOllamaClient("qwen3:8b")
+	client := ai.NewOllamaClient("gemma3:1b")
 	
 	if err := client.TestConnection(); err != nil {
-		log.Printf("❌ Ошибка: %v\n", err)
-		fmt.Println("\n📋 Инструкция по установке:")
-		fmt.Println("1. Скачайте Ollama: https://ollama.com/download/windows")
-		fmt.Println("2. Установите и запустите")
-		fmt.Println("3. Выполните: ollama pull qwen3:8b")
-		fmt.Println("4. Запустите этот тест снова")
+		t.Logf("❌ Ошибка: %v\n", err)
+		t.Log("\n📋 Инструкция по установке:")
+		t.Log("1. Скачайте Ollama: https://ollama.com/download/windows")
+		t.Log("2. Установите и запустите")
+		t.Log("3. Выполните: ollama pull gemma3:1b")
+		t.Log("4. Запустите этот тест снова")
+		t.Skip("Ollama недоступен")
 		return
 	}
 	
@@ -77,11 +77,11 @@ func TestOllamaManual() {
 		
 		response, err := client.Generate(question)
 		if err != nil {
-			fmt.Printf("   ❌ Ошибка: %v\n", err)
+			t.Logf("   ❌ Ошибка: %v\n", err)
 			continue
 		}
 		
-		fmt.Printf("   🤖 Ответ: %s\n", response)
+		t.Logf("   🤖 Ответ: %s\n", response)
 	}
 	
 	fmt.Println("\n✅ Тест завершен!")

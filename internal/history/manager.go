@@ -3,6 +3,7 @@ package history
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -53,13 +54,26 @@ func (m *Manager) SaveMessage(userID int64, username, message, response, model s
 	// Добавляем новое сообщение
 	history = append(history, chatMsg)
 
+	// Ограничиваем историю последними 100 сообщениями для экономии места
+	const maxHistorySize = 100
+	if len(history) > maxHistorySize {
+		history = history[len(history)-maxHistorySize:]
+		log.Printf("История пользователя %d обрезана до %d сообщений", userID, maxHistorySize)
+	}
+
 	// Сохраняем обновленную историю
 	data, err := json.MarshalIndent(history, "", "  ")
 	if err != nil {
-		return err
+		log.Printf("Ошибка сериализации истории для пользователя %d: %v", userID, err)
+		return fmt.Errorf("ошибка сериализации истории: %w", err)
 	}
 
-	return os.WriteFile(filename, data, 0644)
+	if err := os.WriteFile(filename, data, 0644); err != nil {
+		log.Printf("Ошибка записи истории для пользователя %d: %v", userID, err)
+		return fmt.Errorf("ошибка записи истории: %w", err)
+	}
+
+	return nil
 }
 
 // GetUserHistory получает историю пользователя
@@ -68,12 +82,17 @@ func (m *Manager) GetUserHistory(userID int64, limit int) ([]ChatMessage, error)
 	
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return []ChatMessage{}, nil // Пустая история, если файл не найден
+		if os.IsNotExist(err) {
+			return []ChatMessage{}, nil // Пустая история, если файл не найден
+		}
+		log.Printf("Ошибка чтения файла истории для пользователя %d: %v", userID, err)
+		return nil, fmt.Errorf("ошибка чтения истории: %w", err)
 	}
 
 	var history []ChatMessage
 	if err := json.Unmarshal(data, &history); err != nil {
-		return nil, err
+		log.Printf("Ошибка парсинга истории для пользователя %d: %v", userID, err)
+		return nil, fmt.Errorf("ошибка парсинга истории: %w", err)
 	}
 
 	// Возвращаем последние N сообщений

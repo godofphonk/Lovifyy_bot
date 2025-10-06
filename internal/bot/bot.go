@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"Lovifyy_bot/internal/ai"
@@ -11,15 +12,58 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+// RateLimiter для ограничения частоты запросов
+type RateLimiter struct {
+	Users map[int64]time.Time
+	Mutex sync.RWMutex
+}
+
+// NewRateLimiter создает новый rate limiter
+func NewRateLimiter() *RateLimiter {
+	return &RateLimiter{
+		Users: make(map[int64]time.Time),
+	}
+}
+
+// IsAllowed проверяет, можно ли пользователю отправить сообщение
+func (rl *RateLimiter) IsAllowed(userID int64) bool {
+	rl.Mutex.Lock()
+	defer rl.Mutex.Unlock()
+	
+	lastMessage, exists := rl.Users[userID]
+	now := time.Now()
+	
+	// Ограничение: 1 сообщение в 3 секунды
+	if exists && now.Sub(lastMessage) < 3*time.Second {
+		return false
+	}
+	
+	rl.Users[userID] = now
+	return true
+}
+
+// isAdmin проверяет, является ли пользователь администратором
+func (b *Bot) isAdmin(userID int64) bool {
+	for _, adminID := range b.adminIDs {
+		if adminID == userID {
+			return true
+		}
+	}
+	return false
+}
+
 // Bot представляет Telegram бота с ИИ
 type Bot struct {
-	telegram *tgbotapi.BotAPI
-	ai       *ai.OllamaClient
-	history  *history.Manager
+	telegram     *tgbotapi.BotAPI
+	ai           *ai.OllamaClient
+	history      *history.Manager
+	rateLimiter  *RateLimiter
+	systemPrompt string
+	adminIDs     []int64
 }
 
 // NewBot создает новый экземпляр бота
-func NewBot(telegramToken string) *Bot {
+func NewBot(telegramToken, systemPrompt string, adminIDs []int64) *Bot {
 	// Инициализируем Telegram бота
 	bot, err := tgbotapi.NewBotAPI(telegramToken)
 	if err != nil {
@@ -29,8 +73,27 @@ func NewBot(telegramToken string) *Bot {
 	bot.Debug = false
 	log.Printf("Авторизован как %s", bot.Self.UserName)
 
-	// Инициализируем AI клиента
-	aiClient := ai.NewOllamaClient("qwen3:8b")
+	// Устанавливаем команды бота (появятся в меню слева)
+	log.Println("🔧 Настраиваем команды бота...")
+
+	// Устанавливаем команды для меню
+	commands := []tgbotapi.BotCommand{
+		{Command: "start", Description: "🚀 Начать работу с ботом"},
+		{Command: "help", Description: "❓ Показать справку"},
+		{Command: "clear", Description: "🧹 Очистить историю разговора"},
+		{Command: "stats", Description: "📊 Показать статистику"},
+		{Command: "prompt", Description: "🤖 Показать системный промпт"},
+	}
+	
+	setCommands := tgbotapi.NewSetMyCommands(commands...)
+	if _, err := bot.Request(setCommands); err != nil {
+		log.Printf("⚠️ Не удалось установить команды: %v", err)
+	} else {
+		log.Println("✅ Команды для меню установлены!")
+	}
+
+	// Инициализируем AI клиента (используем легкую модель)
+	aiClient := ai.NewOllamaClient("gemma3:1b")
 	
 	// Проверяем доступность AI
 	if err := aiClient.TestConnection(); err != nil {
@@ -43,9 +106,12 @@ func NewBot(telegramToken string) *Bot {
 	log.Println("✅ Система истории инициализирована!")
 
 	return &Bot{
-		telegram: bot,
-		ai:       aiClient,
-		history:  historyManager,
+		telegram:     bot,
+		ai:           aiClient,
+		history:      historyManager,
+		rateLimiter:  NewRateLimiter(),
+		systemPrompt: systemPrompt,
+		adminIDs:     adminIDs,
 	}
 }
 
@@ -76,6 +142,8 @@ func (b *Bot) Start() {
 		for _, update := range updates {
 			if update.Message != nil {
 				go b.handleMessage(update.Message)
+			} else if update.CallbackQuery != nil {
+				go b.handleCallbackQuery(update.CallbackQuery)
 			}
 			offset = update.UpdateID + 1
 		}
@@ -92,6 +160,17 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 	
 	log.Printf("Получено сообщение от %s (ID: %d): %s", username, userID, message.Text)
 
+	// Валидация сообщения
+	if !b.validateMessage(message) {
+		return
+	}
+
+	// Проверка rate limiting
+	if !b.rateLimiter.IsAllowed(userID) {
+		b.sendMessage(message.Chat.ID, "⏰ Пожалуйста, подождите немного перед отправкой следующего сообщения.")
+		return
+	}
+
 	// Обработка команд
 	if message.IsCommand() {
 		b.handleCommand(message)
@@ -100,6 +179,69 @@ func (b *Bot) handleMessage(message *tgbotapi.Message) {
 
 	// Обработка обычных сообщений через ИИ с историей
 	b.handleAIMessage(message)
+}
+
+// validateMessage проверяет валидность сообщения
+func (b *Bot) validateMessage(message *tgbotapi.Message) bool {
+	// Проверка на пустое сообщение
+	if message.Text == "" {
+		return false
+	}
+	
+	// Ограничение длины сообщения (максимум 4000 символов)
+	if len(message.Text) > 4000 {
+		b.sendMessage(message.Chat.ID, "❌ Сообщение слишком длинное. Максимум 4000 символов.")
+		return false
+	}
+	
+	// Проверка на спам (повторяющиеся символы)
+	if b.isSpamMessage(message.Text) {
+		b.sendMessage(message.Chat.ID, "❌ Сообщение выглядит как спам.")
+		return false
+	}
+	
+	return true
+}
+
+// isSpamMessage проверяет, является ли сообщение спамом
+func (b *Bot) isSpamMessage(text string) bool {
+	// Простая проверка на повторяющиеся символы
+	if len(text) > 10 {
+		charCount := make(map[rune]int)
+		for _, char := range text {
+			charCount[char]++
+		}
+		
+		// Если один символ составляет больше 70% сообщения
+		for _, count := range charCount {
+			if float64(count)/float64(len(text)) > 0.7 {
+				return true
+			}
+		}
+	}
+	
+	return false
+}
+
+// handleCallbackQuery обрабатывает нажатия inline кнопок
+func (b *Bot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
+	data := callbackQuery.Data
+	
+	// Подтверждаем получение callback
+	callback := tgbotapi.NewCallback(callbackQuery.ID, "")
+	b.telegram.Request(callback)
+	
+	// Создаем фейковое сообщение для использования существующих обработчиков команд
+	fakeMessage := &tgbotapi.Message{
+		MessageID: callbackQuery.Message.MessageID,
+		From:      callbackQuery.From,
+		Chat:      callbackQuery.Message.Chat,
+		Date:      callbackQuery.Message.Date,
+		Text:      "/" + data, // Превращаем callback data в команду
+	}
+	
+	// Обрабатываем как команду
+	b.handleCommand(fakeMessage)
 }
 
 // handleCommand обрабатывает команды бота
@@ -111,12 +253,31 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		response := "Привет! 👋 Я Lovifyy Bot с локальным ИИ!\n\n" +
 			"🤖 Работаю полностью локально - без лимитов и платежей\n" +
 			"💾 Сохраняю историю наших разговоров\n" +
-			"🚀 Готов отвечать на любые вопросы!\n\n" +
-			"Доступные команды:\n" +
-			"/help - показать справку\n" +
-			"/clear - очистить историю\n" +
-			"/stats - статистика общения"
-		b.sendMessage(message.Chat.ID, response)
+			"🚀 Готов отвечать на любые вопросы!"
+		
+		// Создаем inline клавиатуру с основными командами
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("❓ Справка", "help"),
+				tgbotapi.NewInlineKeyboardButtonData("📊 Статистика", "stats"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🧹 Очистить историю", "clear"),
+				tgbotapi.NewInlineKeyboardButtonData("🤖 Промпт", "prompt"),
+			),
+		)
+		
+		// Добавляем админские кнопки для администраторов
+		if b.isAdmin(userID) {
+			adminRow := tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("👑 Админ-панель", "adminhelp"),
+			)
+			keyboard.InlineKeyboard = append(keyboard.InlineKeyboard, adminRow)
+		}
+		
+		msg := tgbotapi.NewMessage(message.Chat.ID, response)
+		msg.ReplyMarkup = keyboard
+		b.telegram.Send(msg)
 		
 	case "help":
 		response := "🤖 Справка по Lovifyy Bot:\n\n" +
@@ -126,7 +287,8 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			"/start - начать работу\n" +
 			"/help - эта справка\n" +
 			"/clear - очистить историю разговора\n" +
-			"/stats - показать статистику\n\n" +
+			"/stats - показать статистику\n" +
+			"/prompt - показать системный промпт\n\n" +
 			"Просто напишите мне любое сообщение! 😊"
 		b.sendMessage(message.Chat.ID, response)
 		
@@ -154,6 +316,53 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			count, firstMsg.Format("02.01.2006 15:04"))
 		b.sendMessage(message.Chat.ID, response)
 		
+	case "prompt":
+		response := fmt.Sprintf("🤖 Текущий системный промпт:\n\n%s", b.systemPrompt)
+		if b.isAdmin(userID) {
+			response += "\n\n💡 Для изменения используйте: /setprompt <новый промпт>"
+		} else {
+			response += "\n\n💡 Для изменения промпта обратитесь к администратору."
+		}
+		b.sendMessage(message.Chat.ID, response)
+		
+	case "setprompt":
+		if !b.isAdmin(userID) {
+			b.sendMessage(message.Chat.ID, "❌ Эта команда доступна только администраторам.")
+			return
+		}
+		
+		// Получаем новый промпт из текста сообщения
+		args := strings.SplitN(message.Text, " ", 2)
+		if len(args) < 2 || strings.TrimSpace(args[1]) == "" {
+			b.sendMessage(message.Chat.ID, "❌ Использование: /setprompt <новый промпт>\n\nПример:\n/setprompt Ты опытный психолог, который помогает людям с их проблемами.")
+			return
+		}
+		
+		newPrompt := strings.TrimSpace(args[1])
+		b.systemPrompt = newPrompt
+		
+		response := fmt.Sprintf("✅ Системный промпт успешно изменен!\n\n🤖 Новый промпт:\n%s", newPrompt)
+		b.sendMessage(message.Chat.ID, response)
+		log.Printf("👑 Администратор %d изменил системный промпт", userID)
+		
+	case "adminhelp":
+		if !b.isAdmin(userID) {
+			b.sendMessage(message.Chat.ID, "❌ Эта команда доступна только администраторам.")
+			return
+		}
+		
+		response := "👑 Справка для администраторов:\n\n" +
+			"🔧 Доступные команды:\n" +
+			"/setprompt <текст> - изменить системный промпт бота\n" +
+			"/prompt - посмотреть текущий промпт\n" +
+			"/adminhelp - эта справка\n\n" +
+			"💡 Примеры промптов:\n" +
+			"• Ты дружелюбный помощник\n" +
+			"• Ты опытный психолог\n" +
+			"• Ты программист-эксперт\n\n" +
+			"⚠️ Изменения применяются сразу для всех пользователей!"
+		b.sendMessage(message.Chat.ID, response)
+		
 	default:
 		b.sendMessage(message.Chat.ID, "Неизвестная команда. Используйте /help для получения справки.")
 	}
@@ -174,8 +383,8 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 	// Получаем контекст из истории (последние 5 сообщений)
 	context := b.history.GetRecentContext(userID, 5)
 	
-	// Формируем промпт с контекстом
-	prompt := "Ты полезный ИИ-ассистент по имени Lovifyy Bot. Отвечай на русском языке, будь дружелюбным и полезным. ВАЖНО: Отвечай только финальным ответом, без показа процесса размышления или блоков <think>.\n\n"
+	// Формируем промпт с системным промптом и контекстом
+	prompt := b.systemPrompt + "\n\n"
 	if context != "" {
 		prompt += context + "\n"
 	}

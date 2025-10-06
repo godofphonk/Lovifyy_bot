@@ -2,12 +2,14 @@ package ai
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // OllamaClient клиент для работы с локальным Ollama
@@ -51,8 +53,24 @@ func (c *OllamaClient) Generate(prompt string) (string, error) {
 		return "", fmt.Errorf("ошибка создания JSON: %w", err)
 	}
 
+	// Создаем HTTP клиент с таймаутом
+	client := &http.Client{
+		Timeout: 60 * time.Second, // Таймаут 60 секунд для генерации
+	}
+	
+	// Создаем контекст с таймаутом
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	
+	// Создаем запрос с контекстом
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/generate", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("ошибка создания запроса: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	
 	// Отправляем запрос к ЛОКАЛЬНОМУ серверу Ollama
-	resp, err := http.Post(c.baseURL+"/api/generate", "application/json", bytes.NewBuffer(jsonData))
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("ошибка подключения к Ollama (убедитесь что Ollama запущен): %w", err)
 	}
@@ -106,9 +124,17 @@ func (c *OllamaClient) TestConnection() error {
 
 // cleanResponse очищает ответ от блоков размышлений и лишнего текста
 func (c *OllamaClient) cleanResponse(response string) string {
-	// Удаляем блоки <think>...</think>
-	thinkRegex := regexp.MustCompile(`<think>.*?</think>`)
+	// Удаляем блоки <think>...</think> (включая многострочные)
+	thinkRegex := regexp.MustCompile(`(?s)<think>.*?</think>`)
 	cleaned := thinkRegex.ReplaceAllString(response, "")
+	
+	// Удаляем блоки </think> без открывающего тега (на случай ошибок парсинга)
+	thinkEndRegex := regexp.MustCompile(`(?s).*?</think>`)
+	cleaned = thinkEndRegex.ReplaceAllString(cleaned, "")
+	
+	// Удаляем строки, содержащие только </think>
+	thinkLineRegex := regexp.MustCompile(`(?m)^.*</think>.*$\n?`)
+	cleaned = thinkLineRegex.ReplaceAllString(cleaned, "")
 	
 	// Удаляем лишние пробелы и переносы строк в начале и конце
 	cleaned = strings.TrimSpace(cleaned)
@@ -116,6 +142,11 @@ func (c *OllamaClient) cleanResponse(response string) string {
 	// Удаляем множественные пустые строки
 	multipleNewlines := regexp.MustCompile(`\n\s*\n\s*\n`)
 	cleaned = multipleNewlines.ReplaceAllString(cleaned, "\n\n")
+	
+	// Если после очистки остался пустой ответ, возвращаем дефолтное сообщение
+	if cleaned == "" {
+		cleaned = "Извините, не могу сформулировать ответ."
+	}
 	
 	return cleaned
 }
