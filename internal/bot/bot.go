@@ -3,11 +3,13 @@ package bot
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"Lovifyy_bot/internal/ai"
+	"Lovifyy_bot/internal/exercises"
 	"Lovifyy_bot/internal/history"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -75,6 +77,7 @@ type Bot struct {
 	telegram     *tgbotapi.BotAPI
 	ai           *ai.OllamaClient
 	history      *history.Manager
+	exercises    *exercises.Manager
 	rateLimiter  *RateLimiter
 	systemPrompt string
 	adminIDs     []int64
@@ -125,10 +128,15 @@ func NewBot(telegramToken, systemPrompt string, adminIDs []int64) *Bot {
 	historyManager := history.NewManager()
 	log.Println("✅ Система истории инициализирована!")
 
+	// Инициализируем менеджер упражнений
+	exercisesManager := exercises.NewManager()
+	log.Println("✅ Менеджер упражнений инициализирован!")
+
 	return &Bot{
 		telegram:     bot,
 		ai:           aiClient,
 		history:      historyManager,
+		exercises:    exercisesManager,
 		rateLimiter:  NewRateLimiter(),
 		systemPrompt: systemPrompt,
 		adminIDs:     adminIDs,
@@ -263,13 +271,56 @@ func (b *Bot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 		b.handleAdviceCallback(callbackQuery)
 	case "diary":
 		b.handleDiaryCallback(callbackQuery)
+	case "week_1":
+		b.handleWeekCallback(callbackQuery, 1)
+	case "week_2":
+		b.handleWeekCallback(callbackQuery, 2)
+	case "week_3":
+		b.handleWeekCallback(callbackQuery, 3)
+	case "week_4":
+		b.handleWeekCallback(callbackQuery, 4)
 	case "adminhelp":
 		b.handleAdminHelpCallback(callbackQuery)
 	case "prompt":
 		b.handlePromptCallback(callbackQuery)
 	case "setprompt_menu":
 		b.handleSetPromptMenuCallback(callbackQuery)
+	case "exercises_menu":
+		b.handleExercisesMenuCallback(callbackQuery)
+	case "exercise_week_1":
+		b.handleExerciseWeekCallback(callbackQuery, 1)
+	case "exercise_week_2":
+		b.handleExerciseWeekCallback(callbackQuery, 2)
+	case "exercise_week_3":
+		b.handleExerciseWeekCallback(callbackQuery, 3)
+	case "exercise_week_4":
+		b.handleExerciseWeekCallback(callbackQuery, 4)
 	default:
+		// Проверяем, не является ли это callback для элементов недели
+		if strings.HasPrefix(data, "week_") && strings.Contains(data, "_") {
+			parts := strings.Split(data, "_")
+			if len(parts) >= 3 {
+				week, err := strconv.Atoi(parts[1])
+				if err == nil && week >= 1 && week <= 4 {
+					action := strings.Join(parts[2:], "_")
+					b.handleWeekActionCallback(callbackQuery, week, action)
+					return
+				}
+			}
+		}
+		
+		// Проверяем, не является ли это callback для админских настроек недели
+		if strings.HasPrefix(data, "admin_week_") {
+			parts := strings.Split(data, "_")
+			if len(parts) >= 4 {
+				week, err := strconv.Atoi(parts[2])
+				if err == nil && week >= 1 && week <= 4 {
+					field := strings.Join(parts[3:], "_")
+					b.handleAdminWeekFieldCallback(callbackQuery, week, field)
+					return
+				}
+			}
+		}
 		// Если callback не найден, создаем фейковое сообщение
 		fakeMessage := &tgbotapi.Message{
 			MessageID: callbackQuery.Message.MessageID,
@@ -296,43 +347,139 @@ func (b *Bot) handleChatCallback(callbackQuery *tgbotapi.CallbackQuery) {
 
 // handleAdviceCallback обрабатывает нажатие кнопки "Упражнения недели"
 func (b *Bot) handleAdviceCallback(callbackQuery *tgbotapi.CallbackQuery) {
-	userID := callbackQuery.From.ID
+	response := "🗓️ **Выберите неделю для упражнений:**\n\n" +
+		"Каждая неделя содержит специально подобранные упражнения для укрепления ваших отношений."
 	
-	// Получаем всю историю пользователя для анализа
-	history, err := b.history.GetUserHistory(userID, 0) // 0 = вся история
-	if err != nil || len(history) == 0 {
-		b.sendMessage(callbackQuery.Message.Chat.ID, "🗓️ У нас пока нет истории общения для анализа. Сначала поговорите со мной в режиме /chat, а затем я смогу предложить вам персональные упражнения на неделю!")
-		return
-	}
+	// Создаем клавиатуру с выбором недель
+	weekKeyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("1️⃣ Неделя", "week_1"),
+			tgbotapi.NewInlineKeyboardButtonData("2️⃣ Неделя", "week_2"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("3️⃣ Неделя", "week_3"),
+			tgbotapi.NewInlineKeyboardButtonData("4️⃣ Неделя", "week_4"),
+		),
+	)
 	
-	// Отправляем индикатор печати
-	typing := tgbotapi.NewChatAction(callbackQuery.Message.Chat.ID, tgbotapi.ChatTyping)
-	b.telegram.Send(typing)
-	
-	// Формируем специальный промпт для упражнений на неделю
-	advicePrompt := "Ты коуч по продуктивности и благополучию. Проанализируй всю историю общения с пользователем и составь персональные упражнения на неделю. Учти его цели, интересы и сложности, проявившиеся в беседе. Дай конкретный, практичный недельный план с шагами на каждый день (понедельник-воскресенье).\n\n"
-	
-	// Добавляем всю историю для анализа
-	advicePrompt += "История общения с пользователем:\n"
-	for _, msg := range history {
-		advicePrompt += fmt.Sprintf("Пользователь: %s\nБот: %s\n\n", msg.Message, msg.Response)
-	}
-	
-	advicePrompt += "На основе всей этой истории общения составь для пользователя персональные упражнения на неделю (краткие задания на каждый день с пояснениями и критериями выполнения):"
-	
-	// Получаем упражнения от ИИ
-	advice, err := b.ai.Generate(advicePrompt)
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = weekKeyboard
+	b.telegram.Send(msg)
+}
+
+// handleWeekCallback обрабатывает выбор конкретной недели
+func (b *Bot) handleWeekCallback(callbackQuery *tgbotapi.CallbackQuery, week int) {
+	// Сначала проверяем, есть ли готовые упражнения от админов
+	exercise, err := b.exercises.GetWeekExercise(week)
 	if err != nil {
-		log.Printf("Ошибка получения упражнений недели: %v", err)
-		b.sendMessage(callbackQuery.Message.Chat.ID, "Извините, произошла ошибка при подготовке плана упражнений. Попробуйте позже.")
+		log.Printf("Ошибка получения упражнений для недели %d: %v", week, err)
+		b.sendMessage(callbackQuery.Message.Chat.ID, "Извините, произошла ошибка при получении упражнений.")
 		return
 	}
 	
-	// Очищаем ответ
-	advice = strings.TrimSpace(advice)
+	// Если упражнения не настроены, показываем сообщение
+	if exercise == nil {
+		response := fmt.Sprintf("🗓️ **Упражнения для %d недели**\n\n⚠️ Упражнения для этой недели еще не настроены администраторами.\n\nПожалуйста, обратитесь к администратору или попробуйте позже.", week)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
 	
-	// Отправляем упражнения недели
-	response := "🗓️ **Ваши упражнения на неделю:**\n\n" + advice
+	// Показываем приветственное сообщение
+	welcomeText := exercise.WelcomeMessage
+	if welcomeText == "" {
+		welcomeText = fmt.Sprintf("Добро пожаловать в %d неделю упражнений!", week)
+	}
+	
+	response := fmt.Sprintf("🗓️ **%s**\n\n%s", exercise.Title, welcomeText)
+	
+	// Создаем кнопки для недели
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	
+	if exercise.Questions != "" {
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❓ Вопросы", fmt.Sprintf("week_%d_questions", week)),
+		))
+	}
+	
+	buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("💡 Подсказки", fmt.Sprintf("week_%d_tips", week)),
+	))
+	
+	if exercise.Insights != "" {
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔍 Инсайт", fmt.Sprintf("week_%d_insights", week)),
+		))
+	}
+	
+	if exercise.JointQuestions != "" {
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("👫 Совместные вопросы", fmt.Sprintf("week_%d_joint", week)),
+		))
+	}
+	
+	if exercise.DiaryInstructions != "" {
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📝 Что писать в дневнике", fmt.Sprintf("week_%d_diary", week)),
+		))
+	}
+	
+	weekKeyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = weekKeyboard
+	b.telegram.Send(msg)
+}
+
+// handleWeekActionCallback обрабатывает действия внутри недели
+func (b *Bot) handleWeekActionCallback(callbackQuery *tgbotapi.CallbackQuery, week int, action string) {
+	exercise, err := b.exercises.GetWeekExercise(week)
+	if err != nil || exercise == nil {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Упражнения для этой недели не найдены")
+		return
+	}
+	
+	var response string
+	
+	switch action {
+	case "questions":
+		if exercise.Questions != "" {
+			response = fmt.Sprintf("❓ **Вопросы для %d недели**\n\n%s", week, exercise.Questions)
+		} else {
+			response = "❓ Вопросы для этой недели еще не настроены"
+		}
+		
+	case "tips":
+		if exercise.Tips != "" {
+			response = fmt.Sprintf("💡 **Подсказки для %d недели**\n\n%s", week, exercise.Tips)
+		} else {
+			response = "💡 **Подсказки**\n\n• Будьте открыты друг с другом\n• Слушайте внимательно\n• Не судите, а поддерживайте\n• Делитесь своими чувствами честно"
+		}
+		
+	case "insights":
+		if exercise.Insights != "" {
+			response = fmt.Sprintf("🔍 **Инсайт для %d недели**\n\n%s", week, exercise.Insights)
+		} else {
+			response = "🔍 Инсайты для этой недели еще не настроены"
+		}
+		
+	case "joint":
+		if exercise.JointQuestions != "" {
+			response = fmt.Sprintf("👫 **Совместные вопросы для %d недели**\n\n%s", week, exercise.JointQuestions)
+		} else {
+			response = "👫 Совместные вопросы для этой недели еще не настроены"
+		}
+		
+	case "diary":
+		if exercise.DiaryInstructions != "" {
+			response = fmt.Sprintf("📝 **Что писать в дневнике (%d неделя)**\n\n%s", week, exercise.DiaryInstructions)
+		} else {
+			response = "📝 Инструкции для дневника еще не настроены"
+		}
+		
+	default:
+		response = "❌ Неизвестное действие"
+	}
+	
 	b.sendMessage(callbackQuery.Message.Chat.ID, response)
 }
 
@@ -418,6 +565,131 @@ func (b *Bot) handleSetPromptMenuCallback(callbackQuery *tgbotapi.CallbackQuery)
 	b.sendMessage(callbackQuery.Message.Chat.ID, response)
 }
 
+// handleExercisesMenuCallback обрабатывает нажатие кнопки "Настроить упражнения"
+func (b *Bot) handleExercisesMenuCallback(callbackQuery *tgbotapi.CallbackQuery) {
+	userID := callbackQuery.From.ID
+	
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+	
+	response := "🗓️ **Настройка упражнений**\n\n" +
+		"Выберите неделю для настройки упражнений:"
+	
+	// Создаем клавиатуру с выбором недель для настройки
+	exercisesKeyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("1️⃣ Неделя", "exercise_week_1"),
+			tgbotapi.NewInlineKeyboardButtonData("2️⃣ Неделя", "exercise_week_2"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("3️⃣ Неделя", "exercise_week_3"),
+			tgbotapi.NewInlineKeyboardButtonData("4️⃣ Неделя", "exercise_week_4"),
+		),
+	)
+	
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = exercisesKeyboard
+	b.telegram.Send(msg)
+}
+
+// handleExerciseWeekCallback обрабатывает выбор недели для настройки
+func (b *Bot) handleExerciseWeekCallback(callbackQuery *tgbotapi.CallbackQuery, week int) {
+	userID := callbackQuery.From.ID
+	
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+	
+	// Получаем текущие упражнения для этой недели
+	exercise, err := b.exercises.GetWeekExercise(week)
+	if err != nil {
+		log.Printf("Ошибка получения упражнений для недели %d: %v", week, err)
+	}
+	
+	var status string
+	if exercise != nil {
+		status = "✅ Настроено"
+	} else {
+		status = "❌ Не настроено"
+	}
+	
+	response := fmt.Sprintf("🗓️ **Настройка %d недели** (%s)\n\n" +
+		"Выберите элемент для настройки:", week, status)
+	
+	// Создаем кнопки для настройки элементов недели
+	adminKeyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📝 Заголовок", fmt.Sprintf("admin_week_%d_title", week)),
+			tgbotapi.NewInlineKeyboardButtonData("👋 Приветствие", fmt.Sprintf("admin_week_%d_welcome", week)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❓ Вопросы", fmt.Sprintf("admin_week_%d_questions", week)),
+			tgbotapi.NewInlineKeyboardButtonData("💡 Подсказки", fmt.Sprintf("admin_week_%d_tips", week)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔍 Инсайт", fmt.Sprintf("admin_week_%d_insights", week)),
+			tgbotapi.NewInlineKeyboardButtonData("👫 Совместные вопросы", fmt.Sprintf("admin_week_%d_joint", week)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📝 Инструкции для дневника", fmt.Sprintf("admin_week_%d_diary", week)),
+		),
+	)
+	
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = adminKeyboard
+	b.telegram.Send(msg)
+}
+
+// handleAdminWeekFieldCallback обрабатывает настройку полей недели
+func (b *Bot) handleAdminWeekFieldCallback(callbackQuery *tgbotapi.CallbackQuery, week int, field string) {
+	userID := callbackQuery.From.ID
+	
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+	
+	var fieldName, example string
+	
+	switch field {
+	case "title":
+		fieldName = "Заголовок"
+		example = "/setweek 1 title Неделя знакомства"
+	case "welcome":
+		fieldName = "Приветственное сообщение"
+		example = "/setweek 1 welcome Добро пожаловать в первую неделю! Сегодня мы начинаем путь к более глубокому пониманию друг друга."
+	case "questions":
+		fieldName = "Вопросы"
+		example = "/setweek 1 questions 1. Что вас больше всего привлекает в партнере? 2. Какие у вас общие цели?"
+	case "tips":
+		fieldName = "Подсказки"
+		example = "/setweek 1 tips Будьте честными в своих ответах. Слушайте внимательно. Не бойтесь быть уязвимыми."
+	case "insights":
+		fieldName = "Инсайт"
+		example = "/setweek 1 insights Понимание начинается с принятия различий друг друга."
+	case "joint":
+		fieldName = "Совместные вопросы"
+		example = "/setweek 1 joint Обсудите вместе: Какие традиции вы хотели бы создать в ваших отношениях?"
+	case "diary":
+		fieldName = "Инструкции для дневника"
+		example = "/setweek 1 diary Записывайте свои чувства после каждого упражнения. Что вы узнали о себе и партнере?"
+	default:
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Неизвестное поле")
+		return
+	}
+	
+	response := fmt.Sprintf("🗓️ **Настройка: %s (%d неделя)**\n\n" +
+		"Используйте команду:\n" +
+		"`/setweek %d %s <текст>`\n\n" +
+		"**Пример:**\n" +
+		"`%s`", fieldName, week, week, field, example)
+	
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
 // handleCommand обрабатывает команды бота
 func (b *Bot) handleCommand(message *tgbotapi.Message) {
 	userID := message.From.ID
@@ -464,42 +736,24 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		b.sendMessage(message.Chat.ID, response)
 		
 	case "advice":
-		// Получаем всю историю пользователя для анализа
-		history, err := b.history.GetUserHistory(userID, 0) // 0 = вся история
-		if err != nil || len(history) == 0 {
-			b.sendMessage(message.Chat.ID, "🗓️ У нас пока нет истории общения для анализа. Сначала поговорите со мной в режиме /chat, а затем я смогу предложить вам персональные упражнения на неделю!")
-			return
-		}
+		response := "🗓️ **Выберите неделю для упражнений:**\n\n" +
+			"Каждая неделя содержит специально подобранные упражнения для укрепления ваших отношений."
 		
-		// Отправляем индикатор печати
-		typing := tgbotapi.NewChatAction(message.Chat.ID, tgbotapi.ChatTyping)
-		b.telegram.Send(typing)
+		// Создаем клавиатуру с выбором недель
+		weekKeyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("1️⃣ Неделя", "week_1"),
+				tgbotapi.NewInlineKeyboardButtonData("2️⃣ Неделя", "week_2"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("3️⃣ Неделя", "week_3"),
+				tgbotapi.NewInlineKeyboardButtonData("4️⃣ Неделя", "week_4"),
+			),
+		)
 		
-		// Формируем специальный промпт для упражнений на неделю
-		advicePrompt := "Ты коуч по продуктивности и благополучию. Проанализируй всю историю общения с пользователем и составь персональные упражнения на неделю. Учти его цели, интересы и сложности, проявившиеся в беседе. Дай конкретный, практичный недельный план с шагами на каждый день (понедельник-воскресенье).\n\n"
-		
-		// Добавляем всю историю для анализа
-		advicePrompt += "История общения с пользователем:\n"
-		for _, msg := range history {
-			advicePrompt += fmt.Sprintf("Пользователь: %s\nБот: %s\n\n", msg.Message, msg.Response)
-		}
-		
-		advicePrompt += "На основе всей этой истории общения составь для пользователя персональные упражнения на неделю (краткие задания на каждый день с пояснениями и критериями выполнения):"
-		
-		// Получаем упражнения от ИИ
-		advice, err := b.ai.Generate(advicePrompt)
-		if err != nil {
-			log.Printf("Ошибка получения упражнений недели: %v", err)
-			b.sendMessage(message.Chat.ID, "Извините, произошла ошибка при подготовке плана упражнений. Попробуйте позже.")
-			return
-		}
-		
-		// Очищаем ответ
-		advice = strings.TrimSpace(advice)
-		
-		// Отправляем упражнения недели
-		response := "🗓️ **Ваши упражнения на неделю:**\n\n" + advice
-		b.sendMessage(message.Chat.ID, response)
+		msg := tgbotapi.NewMessage(message.Chat.ID, response)
+		msg.ReplyMarkup = weekKeyboard
+		b.telegram.Send(msg)
 		
 	case "diary":
 		b.setUserState(userID, "diary")
@@ -529,6 +783,66 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		b.sendMessage(message.Chat.ID, response)
 		log.Printf("👑 Администратор %d изменил системный промпт", userID)
 		
+	case "setweek":
+		if !b.isAdmin(userID) {
+			b.sendMessage(message.Chat.ID, "❌ Эта команда доступна только администраторам.")
+			return
+		}
+		
+		// Парсим команду: /setweek <номер недели> <поле> <значение>
+		args := strings.SplitN(message.Text, " ", 4)
+		if len(args) < 4 {
+			b.sendMessage(message.Chat.ID, "❌ Использование: /setweek <неделя> <поле> <значение>\n\nПоля: title, welcome, questions, tips, insights, joint, diary\n\nПример:\n/setweek 1 title Неделя знакомства")
+			return
+		}
+		
+		// Парсим номер недели
+		week, err := strconv.Atoi(args[1])
+		if err != nil || week < 1 || week > 4 {
+			b.sendMessage(message.Chat.ID, "❌ Номер недели должен быть от 1 до 4")
+			return
+		}
+		
+		field := args[2]
+		value := strings.TrimSpace(args[3])
+		
+		if value == "" {
+			b.sendMessage(message.Chat.ID, "❌ Значение не может быть пустым")
+			return
+		}
+		
+		// Сохраняем поле
+		err = b.exercises.SaveWeekField(week, field, value)
+		if err != nil {
+			log.Printf("Ошибка сохранения поля %s для недели %d: %v", field, week, err)
+			b.sendMessage(message.Chat.ID, "❌ Ошибка сохранения: "+err.Error())
+			return
+		}
+		
+		var fieldName string
+		switch field {
+		case "title":
+			fieldName = "Заголовок"
+		case "welcome":
+			fieldName = "Приветственное сообщение"
+		case "questions":
+			fieldName = "Вопросы"
+		case "tips":
+			fieldName = "Подсказки"
+		case "insights":
+			fieldName = "Инсайт"
+		case "joint":
+			fieldName = "Совместные вопросы"
+		case "diary":
+			fieldName = "Инструкции для дневника"
+		default:
+			fieldName = field
+		}
+		
+		response := fmt.Sprintf("✅ %s для %d недели успешно сохранен!\n\n📝 **%s:**\n%s", fieldName, week, fieldName, value)
+		b.sendMessage(message.Chat.ID, response)
+		log.Printf("👑 Администратор %d настроил %s для недели %d", userID, field, week)
+		
 	case "adminhelp":
 		if !b.isAdmin(userID) {
 			b.sendMessage(message.Chat.ID, "❌ Эта команда доступна только администраторам.")
@@ -539,11 +853,18 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			"🔧 Доступные команды:\n" +
 			"/setprompt <текст> - изменить системный промпт\n" +
 			"/prompt - посмотреть текущий промпт\n" +
+			"/setweek <неделя> <поле> <значение> - настроить элементы недели\n" +
 			"/adminhelp - эта справка\n\n" +
-			"💡 Примеры промптов:\n" +
-			"• Ты дружелюбный помощник\n" +
-			"• Ты опытный психолог\n" +
-			"• Ты программист-эксперт\n\n" +
+			"💡 Поля для настройки недель:\n" +
+			"• title - заголовок недели\n" +
+			"• welcome - приветственное сообщение\n" +
+			"• questions - вопросы для пары\n" +
+			"• tips - подсказки\n" +
+			"• insights - инсайты\n" +
+			"• joint - совместные вопросы\n" +
+			"• diary - инструкции для дневника\n\n" +
+			"**Пример:**\n" +
+			"`/setweek 1 title Неделя знакомства`\n\n" +
 			"⚠️ Изменения применяются сразу для всех пользователей!"
 		
 		// Создаем админскую клавиатуру
@@ -553,6 +874,9 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			),
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData("✏️ Изменить промпт", "setprompt_menu"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🗓️ Настроить упражнения", "exercises_menu"),
 			),
 		)
 		
@@ -612,16 +936,18 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 	// Проверяем состояние пользователя
 	userState := b.getUserState(userID)
 	
-	// Если пользователь в режиме дневника, просто подтверждаем запись
+	// Если пользователь в режиме дневника, сохраняем в отдельный файл дневника
 	if userState == "diary" {
-		// Сохраняем запись в историю как дневниковую запись
-		diaryResponse := "📝 Записано"
-		err := b.history.SaveMessage(userID, username, message.Text, diaryResponse, "diary")
+		// Сохраняем запись в дневник (отдельный JSON файл)
+		err := b.history.SaveDiaryEntry(userID, username, message.Text)
 		if err != nil {
 			log.Printf("Ошибка сохранения записи дневника: %v", err)
+			b.sendMessage(message.Chat.ID, "❌ Ошибка сохранения записи в дневник")
+			return
 		}
 		
-		// Отправляем подтверждение
+		// Отправляем подтверждение с эмодзи и временем
+		diaryResponse := "📝 Запись сохранена в дневник"
 		b.sendMessage(message.Chat.ID, diaryResponse)
 		return
 	}
