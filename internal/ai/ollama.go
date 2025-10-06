@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -33,8 +34,14 @@ type OllamaResponse struct {
 
 // NewOllamaClient создает новый клиент Ollama
 func NewOllamaClient(model string) *OllamaClient {
+	// Получаем URL Ollama из переменной окружения (для Docker)
+	baseURL := os.Getenv("OLLAMA_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:11434" // Дефолтный URL для локальной разработки
+	}
+	
 	return &OllamaClient{
-		baseURL: "http://localhost:11434", // Ollama работает локально на порту 11434
+		baseURL: baseURL,
 		model:   model,
 	}
 }
