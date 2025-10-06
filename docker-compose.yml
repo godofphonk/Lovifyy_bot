@@ -35,6 +35,8 @@ services:
       - OLLAMA_URL=http://ollama:11434
     volumes:
       - ./chat_history:/app/chat_history
+      - ./diary_entries:/app/diary_entries
+      - ./exercises:/app/exercises
     restart: unless-stopped
     networks:
       - lovifyy_network

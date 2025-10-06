@@ -35,7 +35,7 @@ WORKDIR /app
 COPY --from=builder /app/main .
 
 # Создаем директории для данных
-RUN mkdir -p chat_history && chown -R appuser:appuser /app
+RUN mkdir -p chat_history diary_entries exercises && chown -R appuser:appuser /app
 
 # Переключаемся на непривилегированного пользователя
 USER appuser
