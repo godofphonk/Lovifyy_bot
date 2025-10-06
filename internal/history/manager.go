@@ -19,16 +19,32 @@ type ChatMessage struct {
 	Model     string    `json:"model"`
 }
 
-// Manager управляет историей переписки
+// DiaryEntry представляет одну запись в дневнике
+type DiaryEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	UserID    int64     `json:"user_id"`
+	Username  string    `json:"username"`
+	Entry     string    `json:"entry"`
+	Mood      string    `json:"mood,omitempty"`     // настроение (опционально)
+	Tags      []string  `json:"tags,omitempty"`     // теги (опционально)
+}
+
+// Manager управляет историей переписки и дневниками
 type Manager struct {
 	historyDir string
+	diaryDir   string
 }
 
 // NewManager создает новый менеджер истории
 func NewManager() *Manager {
 	historyDir := "chat_history"
+	diaryDir := "diary_entries"
 	os.MkdirAll(historyDir, 0755)
-	return &Manager{historyDir: historyDir}
+	os.MkdirAll(diaryDir, 0755)
+	return &Manager{
+		historyDir: historyDir,
+		diaryDir:   diaryDir,
+	}
 }
 
 // SaveMessage сохраняет сообщение в историю
@@ -138,5 +154,84 @@ func (m *Manager) GetStats(userID int64) (int, time.Time, error) {
 // ClearUserHistory очищает историю конкретного пользователя
 func (m *Manager) ClearUserHistory(userID int64) error {
 	filename := filepath.Join(m.historyDir, fmt.Sprintf("user_%d.json", userID))
+	return os.Remove(filename)
+}
+
+// SaveDiaryEntry сохраняет запись в дневник
+func (m *Manager) SaveDiaryEntry(userID int64, username, entry string) error {
+	diaryEntry := DiaryEntry{
+		Timestamp: time.Now(),
+		UserID:    userID,
+		Username:  username,
+		Entry:     entry,
+	}
+
+	// Создаем файл дневника для каждого пользователя
+	filename := filepath.Join(m.diaryDir, fmt.Sprintf("diary_%d.json", userID))
+	
+	// Читаем существующие записи дневника
+	var diary []DiaryEntry
+	if data, err := os.ReadFile(filename); err == nil {
+		json.Unmarshal(data, &diary)
+	}
+
+	// Добавляем новую запись
+	diary = append(diary, diaryEntry)
+
+	// Сохраняем обновленный дневник
+	data, err := json.MarshalIndent(diary, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filename, data, 0644)
+}
+
+// GetUserDiary получает записи дневника пользователя
+func (m *Manager) GetUserDiary(userID int64, limit int) ([]DiaryEntry, error) {
+	filename := filepath.Join(m.diaryDir, fmt.Sprintf("diary_%d.json", userID))
+	
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []DiaryEntry{}, nil // Возвращаем пустой дневник, если файла нет
+		}
+		return nil, err
+	}
+
+	var diary []DiaryEntry
+	err = json.Unmarshal(data, &diary)
+	if err != nil {
+		return nil, err
+	}
+
+	// Если лимит указан, возвращаем последние записи
+	if limit > 0 && len(diary) > limit {
+		return diary[len(diary)-limit:], nil
+	}
+
+	return diary, nil
+}
+
+// GetDiaryStats получает статистику дневника
+func (m *Manager) GetDiaryStats(userID int64) (int, time.Time, error) {
+	diary, err := m.GetUserDiary(userID, 0)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+
+	if len(diary) == 0 {
+		return 0, time.Time{}, nil
+	}
+
+	totalEntries := len(diary)
+	firstEntry := diary[0].Timestamp
+
+	return totalEntries, firstEntry, nil
+}
+
+// ClearUserDiary очищает дневник конкретного пользователя
+func (m *Manager) ClearUserDiary(userID int64) error {
+	filename := filepath.Join(m.diaryDir, fmt.Sprintf("diary_%d.json", userID))
 	return os.Remove(filename)
 }
