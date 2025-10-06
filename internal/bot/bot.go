@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"Lovifyy_bot/internal/ai"
 	"Lovifyy_bot/internal/history"
@@ -50,14 +51,33 @@ func NewBot(telegramToken string) *Bot {
 
 // Start запускает бота
 func (b *Bot) Start() {
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
+	// Удаляем webhook перед запуском polling
+	del := tgbotapi.DeleteWebhookConfig{DropPendingUpdates: true}
+	if _, err := b.telegram.Request(del); err != nil {
+		log.Printf("Не удалось удалить webhook: %v", err)
+	}
 
-	updates := b.telegram.GetUpdatesChan(u)
+	// Ручной polling с offset для избежания дублирования
+	offset := 0
+	for {
+		u := tgbotapi.UpdateConfig{
+			Offset:  offset,
+			Limit:   100,
+			Timeout: 60,
+		}
 
-	for update := range updates {
-		if update.Message != nil {
-			go b.handleMessage(update.Message)
+		updates, err := b.telegram.GetUpdates(u)
+		if err != nil {
+			log.Printf("Ошибка получения апдейтов: %v", err)
+			time.Sleep(3 * time.Second)
+			continue
+		}
+
+		for _, update := range updates {
+			if update.Message != nil {
+				go b.handleMessage(update.Message)
+			}
+			offset = update.UpdateID + 1
 		}
 	}
 }
