@@ -372,20 +372,46 @@ func (b *Bot) handleChatCallback(callbackQuery *tgbotapi.CallbackQuery) {
 
 // handleAdviceCallback обрабатывает нажатие кнопки "Упражнения недели"
 func (b *Bot) handleAdviceCallback(callbackQuery *tgbotapi.CallbackQuery) {
-	response := "🗓️ **Выберите неделю для упражнений:**\n\n" +
+	// Получаем список активных недель
+	activeWeeks := b.exercises.GetActiveWeeks()
+	
+	if len(activeWeeks) == 0 {
+		response := "🗓️ **Упражнения недели**\n\n" +
+			"⚠️ В данный момент нет доступных недель.\n" +
+			"Администраторы еще не открыли доступ к упражнениям."
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+	
+	response := "🗓️ **Выберите доступную неделю:**\n\n" +
 		"Каждая неделя содержит специально подобранные упражнения для укрепления ваших отношений."
 	
-	// Создаем клавиатуру с выбором недель
-	weekKeyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("1️⃣ Неделя", "week_1"),
-			tgbotapi.NewInlineKeyboardButtonData("2️⃣ Неделя", "week_2"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("3️⃣ Неделя", "week_3"),
-			tgbotapi.NewInlineKeyboardButtonData("4️⃣ Неделя", "week_4"),
-		),
-	)
+	// Создаем кнопки только для активных недель
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	var currentRow []tgbotapi.InlineKeyboardButton
+	
+	weekEmojis := []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣"}
+	
+	for _, week := range activeWeeks {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("%s Неделя", weekEmojis[week-1]), 
+			fmt.Sprintf("week_%d", week),
+		)
+		currentRow = append(currentRow, button)
+		
+		// Добавляем по 2 кнопки в ряд
+		if len(currentRow) == 2 {
+			buttons = append(buttons, currentRow)
+			currentRow = []tgbotapi.InlineKeyboardButton{}
+		}
+	}
+	
+	// Добавляем оставшиеся кнопки
+	if len(currentRow) > 0 {
+		buttons = append(buttons, currentRow)
+	}
+	
+	weekKeyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
 	
 	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
 	msg.ReplyMarkup = weekKeyboard
@@ -394,7 +420,14 @@ func (b *Bot) handleAdviceCallback(callbackQuery *tgbotapi.CallbackQuery) {
 
 // handleWeekCallback обрабатывает выбор конкретной недели
 func (b *Bot) handleWeekCallback(callbackQuery *tgbotapi.CallbackQuery, week int) {
-	// Сначала проверяем, есть ли готовые упражнения от админов
+	// Проверяем, активна ли неделя
+	if !b.exercises.IsWeekActive(week) {
+		response := fmt.Sprintf("🗓️ **Упражнения для %d недели**\n\n⚠️ Доступ к этой неделе закрыт администраторами.\n\nПожалуйста, выберите доступную неделю.", week)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+	
+	// Получаем упражнения для недели
 	exercise, err := b.exercises.GetWeekExercise(week)
 	if err != nil {
 		log.Printf("Ошибка получения упражнений для недели %d: %v", week, err)
@@ -510,20 +543,46 @@ func (b *Bot) handleWeekActionCallback(callbackQuery *tgbotapi.CallbackQuery, we
 
 // handleDiaryCallback обрабатывает нажатие кнопки "Мини дневник"
 func (b *Bot) handleDiaryCallback(callbackQuery *tgbotapi.CallbackQuery) {
-	response := "📝 **Мини дневник**\n\n" +
-		"Выберите неделю для записи в дневник:"
+	// Получаем список активных недель
+	activeWeeks := b.exercises.GetActiveWeeks()
 	
-	// Создаем клавиатуру с выбором недель для дневника
-	diaryKeyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("1️⃣ Неделя", "diary_week_1"),
-			tgbotapi.NewInlineKeyboardButtonData("2️⃣ Неделя", "diary_week_2"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("3️⃣ Неделя", "diary_week_3"),
-			tgbotapi.NewInlineKeyboardButtonData("4️⃣ Неделя", "diary_week_4"),
-		),
-	)
+	if len(activeWeeks) == 0 {
+		response := "📝 **Мини дневник**\n\n" +
+			"⚠️ В данный момент нет доступных недель для записей.\n" +
+			"Администраторы еще не открыли доступ к неделям."
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+	
+	response := "📝 **Мини дневник**\n\n" +
+		"Выберите доступную неделю для записи:"
+	
+	// Создаем кнопки только для активных недель
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	var currentRow []tgbotapi.InlineKeyboardButton
+	
+	weekEmojis := []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣"}
+	
+	for _, week := range activeWeeks {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("%s Неделя", weekEmojis[week-1]), 
+			fmt.Sprintf("diary_week_%d", week),
+		)
+		currentRow = append(currentRow, button)
+		
+		// Добавляем по 2 кнопки в ряд
+		if len(currentRow) == 2 {
+			buttons = append(buttons, currentRow)
+			currentRow = []tgbotapi.InlineKeyboardButton{}
+		}
+	}
+	
+	// Добавляем оставшиеся кнопки
+	if len(currentRow) > 0 {
+		buttons = append(buttons, currentRow)
+	}
+	
+	diaryKeyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
 	
 	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
 	msg.ReplyMarkup = diaryKeyboard
@@ -532,6 +591,13 @@ func (b *Bot) handleDiaryCallback(callbackQuery *tgbotapi.CallbackQuery) {
 
 // handleDiaryWeekCallback обрабатывает выбор недели для дневника
 func (b *Bot) handleDiaryWeekCallback(callbackQuery *tgbotapi.CallbackQuery, week int) {
+	// Проверяем, активна ли неделя
+	if !b.exercises.IsWeekActive(week) {
+		response := fmt.Sprintf("📝 **Дневник - %d неделя**\n\n⚠️ Доступ к записям этой недели закрыт администраторами.\n\nПожалуйста, выберите доступную неделю.", week)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+	
 	response := fmt.Sprintf("📝 **Дневник - %d неделя**\n\n" +
 		"Выберите тип записи:", week)
 	
@@ -751,6 +817,9 @@ func (b *Bot) handleExerciseWeekCallback(callbackQuery *tgbotapi.CallbackQuery, 
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("📝 Инструкции для дневника", fmt.Sprintf("admin_week_%d_diary", week)),
 		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔓 Управление доступом", fmt.Sprintf("admin_week_%d_active", week)),
+		),
 	)
 	
 	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
@@ -791,6 +860,9 @@ func (b *Bot) handleAdminWeekFieldCallback(callbackQuery *tgbotapi.CallbackQuery
 	case "diary":
 		fieldName = "Инструкции для дневника"
 		example = "/setweek 1 diary Записывайте свои чувства после каждого упражнения. Что вы узнали о себе и партнере?"
+	case "active":
+		fieldName = "Активность недели"
+		example = "/setweek 1 active true  (или false для закрытия)"
 	default:
 		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Неизвестное поле")
 		return
@@ -871,20 +943,46 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		b.telegram.Send(msg)
 		
 	case "diary":
-		response := "📝 **Мини дневник**\n\n" +
-			"Выберите неделю для записи в дневник:"
+		// Получаем список активных недель
+		activeWeeks := b.exercises.GetActiveWeeks()
 		
-		// Создаем клавиатуру с выбором недель для дневника
-		diaryKeyboard := tgbotapi.NewInlineKeyboardMarkup(
-			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("1️⃣ Неделя", "diary_week_1"),
-				tgbotapi.NewInlineKeyboardButtonData("2️⃣ Неделя", "diary_week_2"),
-			),
-			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("3️⃣ Неделя", "diary_week_3"),
-				tgbotapi.NewInlineKeyboardButtonData("4️⃣ Неделя", "diary_week_4"),
-			),
-		)
+		if len(activeWeeks) == 0 {
+			response := "📝 **Мини дневник**\n\n" +
+				"⚠️ В данный момент нет доступных недель для записей.\n" +
+				"Администраторы еще не открыли доступ к неделям."
+			b.sendMessage(message.Chat.ID, response)
+			return
+		}
+		
+		response := "📝 **Мини дневник**\n\n" +
+			"Выберите доступную неделю для записи:"
+		
+		// Создаем кнопки только для активных недель
+		var buttons [][]tgbotapi.InlineKeyboardButton
+		var currentRow []tgbotapi.InlineKeyboardButton
+		
+		weekEmojis := []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣"}
+		
+		for _, week := range activeWeeks {
+			button := tgbotapi.NewInlineKeyboardButtonData(
+				fmt.Sprintf("%s Неделя", weekEmojis[week-1]), 
+				fmt.Sprintf("diary_week_%d", week),
+			)
+			currentRow = append(currentRow, button)
+			
+			// Добавляем по 2 кнопки в ряд
+			if len(currentRow) == 2 {
+				buttons = append(buttons, currentRow)
+				currentRow = []tgbotapi.InlineKeyboardButton{}
+			}
+		}
+		
+		// Добавляем оставшиеся кнопки
+		if len(currentRow) > 0 {
+			buttons = append(buttons, currentRow)
+		}
+		
+		diaryKeyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
 		
 		msg := tgbotapi.NewMessage(message.Chat.ID, response)
 		msg.ReplyMarkup = diaryKeyboard
@@ -989,9 +1087,12 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			"• tips - подсказки\n" +
 			"• insights - инсайты\n" +
 			"• joint - совместные вопросы\n" +
-			"• diary - инструкции для дневника\n\n" +
-			"**Пример:**\n" +
-			"`/setweek 1 title Неделя знакомства`\n\n" +
+			"• diary - инструкции для дневника\n" +
+			"• active - открыть/закрыть доступ (true/false)\n\n" +
+			"**Примеры:**\n" +
+			"`/setweek 1 title Неделя знакомства`\n" +
+			"`/setweek 3 active true` - открыть 3 неделю\n" +
+			"`/setweek 2 active false` - закрыть 2 неделю\n\n" +
 			"⚠️ Изменения применяются сразу для всех пользователей!"
 		
 		// Создаем админскую клавиатуру

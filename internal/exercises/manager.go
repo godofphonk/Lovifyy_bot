@@ -17,6 +17,7 @@ type WeekExercise struct {
 	Insights            string `json:"insights"`             // Кнопка инсайт
 	JointQuestions      string `json:"joint_questions"`      // Совместные вопросы в конце недели
 	DiaryInstructions   string `json:"diary_instructions"`   // Что делать в дневнике
+	IsActive            bool   `json:"is_active"`            // Доступна ли неделя для пользователей
 }
 
 // Manager управляет упражнениями
@@ -83,6 +84,9 @@ func (m *Manager) SaveWeekField(week int, field, value string) error {
 		exercise.JointQuestions = value
 	case "diary":
 		exercise.DiaryInstructions = value
+	case "active":
+		// Для активации принимаем "true"/"false" или "1"/"0"
+		exercise.IsActive = (value == "true" || value == "1")
 	default:
 		return fmt.Errorf("неизвестное поле: %s", field)
 	}
@@ -139,4 +143,27 @@ func (m *Manager) GetAllExercises() ([]WeekExercise, error) {
 func (m *Manager) DeleteWeekExercise(week int) error {
 	filename := filepath.Join(m.exercisesDir, fmt.Sprintf("week_%d.json", week))
 	return os.Remove(filename)
+}
+
+// GetActiveWeeks возвращает список номеров активных недель
+func (m *Manager) GetActiveWeeks() []int {
+	var activeWeeks []int
+	
+	for week := 1; week <= 4; week++ {
+		exercise, err := m.GetWeekExercise(week)
+		if err == nil && exercise != nil && exercise.IsActive {
+			activeWeeks = append(activeWeeks, week)
+		}
+	}
+	
+	return activeWeeks
+}
+
+// IsWeekActive проверяет, активна ли неделя
+func (m *Manager) IsWeekActive(week int) bool {
+	exercise, err := m.GetWeekExercise(week)
+	if err != nil || exercise == nil {
+		return false
+	}
+	return exercise.IsActive
 }
