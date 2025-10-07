@@ -1,8 +1,11 @@
 package bot
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -274,6 +277,8 @@ func (b *Bot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 		b.handleAdviceCallback(callbackQuery)
 	case "diary":
 		b.handleDiaryCallback(callbackQuery)
+	case "diary_view":
+		b.handleDiaryViewCallback(callbackQuery)
 	case "week_1":
 		b.handleWeekCallback(callbackQuery, 1)
 	case "week_2":
@@ -345,6 +350,18 @@ func (b *Bot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 				if err == nil && week >= 1 && week <= 4 {
 					entryType := strings.Join(parts[3:], "_")
 					b.handleDiaryTypeCallback(callbackQuery, week, entryType)
+					return
+				}
+			}
+		}
+
+		// Проверяем, не является ли это callback для просмотра записей недели
+		if strings.HasPrefix(data, "diary_view_week_") {
+			parts := strings.Split(data, "_")
+			if len(parts) >= 4 {
+				week, err := strconv.Atoi(parts[3])
+				if err == nil && week >= 1 && week <= 4 {
+					b.handleDiaryViewWeekCallback(callbackQuery, week)
 					return
 				}
 			}
@@ -517,11 +534,9 @@ func (b *Bot) handleWeekActionCallback(callbackQuery *tgbotapi.CallbackQuery, we
 		}
 
 	case "insights":
-		if exercise.Insights != "" {
-			response = fmt.Sprintf("🔍 **Инсайт для %d недели**\n\n%s", week, exercise.Insights)
-		} else {
-			response = "🔍 Инсайты для этой недели еще не настроены"
-		}
+		// Генерируем персональный инсайт на основе истории пользователя
+		b.generatePersonalInsight(callbackQuery, week)
+		return
 
 	case "joint":
 		if exercise.JointQuestions != "" {
@@ -584,6 +599,11 @@ func (b *Bot) handleDiaryCallback(callbackQuery *tgbotapi.CallbackQuery) {
 	if len(currentRow) > 0 {
 		buttons = append(buttons, currentRow)
 	}
+
+	// Добавляем кнопку "Посмотреть свои записи"
+	buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("👀 Посмотреть свои записи", "diary_view"),
+	))
 
 	diaryKeyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
 
@@ -1338,4 +1358,247 @@ func (b *Bot) sendMessage(chatID int64, text string) {
 	if err != nil {
 		log.Printf("Ошибка отправки сообщения: %v", err)
 	}
+}
+
+// generatePersonalInsight генерирует персональный инсайт на основе истории пользователя
+func (b *Bot) generatePersonalInsight(callbackQuery *tgbotapi.CallbackQuery, week int) {
+	userID := callbackQuery.From.ID
+	username := callbackQuery.From.UserName
+	if username == "" {
+		username = callbackQuery.From.FirstName
+	}
+
+	// Отправляем индикатор печати
+	typing := tgbotapi.NewChatAction(callbackQuery.Message.Chat.ID, tgbotapi.ChatTyping)
+	b.telegram.Send(typing)
+
+	// Получаем записи дневника для конкретной недели
+	diaryEntries, err := b.history.GetDiaryEntriesByWeek(userID, week)
+	if err != nil || len(diaryEntries) == 0 {
+		// Если нет записей в дневнике для этой недели, показываем сообщение
+		response := fmt.Sprintf("🔍 **Персональный инсайт (%d неделя)**\n\n" +
+			"Для создания персонального инсайта для %d недели мне нужны ваши записи в дневнике. " +
+			"Сначала сделайте записи в дневнике для этой недели, а затем вернитесь к инсайту.\n\n" +
+			"📝 Используйте кнопку \"Что писать в дневнике\" для получения инструкций", week, week)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+
+	// Формируем контекст из записей дневника
+	var diaryContext string
+	for _, entry := range diaryEntries {
+		var entryTypeName string
+		switch entry.Type {
+		case "questions":
+			entryTypeName = "Ответы на упражнения"
+		case "joint":
+			entryTypeName = "Совместные вопросы"
+		case "personal":
+			entryTypeName = "Личные записи"
+		default:
+			entryTypeName = "Запись"
+		}
+		diaryContext += fmt.Sprintf("%s: %s\n\n", entryTypeName, entry.Entry)
+	}
+
+	// Создаем сообщения для OpenAI
+	openaiMessages := []history.OpenAIMessage{
+		{
+			Role:    "system",
+			Content: b.systemPrompt,
+		},
+		{
+			Role:    "user",
+			Content: fmt.Sprintf("Вот мои записи из дневника за %d неделю:\n\n%s", week, diaryContext),
+		},
+	}
+
+	// Добавляем специальный запрос для генерации инсайта
+	insightPrompt := "После анализа нашего разговора составь краткое резюме в следующем формате:\n\n" +
+		"«Судя по вашим ответам, вы цените [качества] и чаще всего испытываете [чувство/тревогу] в ситуациях, когда [описание ситуации]. Обсудите вместе, как это влияет на ваши отношения».\n\n" +
+		"Проанализируй нашу беседу и дай персональный инсайт именно в этом формате."
+
+	openaiMessages = append(openaiMessages, history.OpenAIMessage{
+		Role:    "user",
+		Content: insightPrompt,
+	})
+
+	// Конвертируем в формат AI клиента
+	aiMessages := make([]ai.OpenAIMessage, len(openaiMessages))
+	for i, msg := range openaiMessages {
+		aiMessages[i] = ai.OpenAIMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	// Получаем инсайт от OpenAI
+	insightResponse, err := b.ai.GenerateWithHistory(aiMessages)
+	if err != nil {
+		log.Printf("Ошибка генерации инсайта: %v", err)
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Ошибка при генерации персонального инсайта. Попробуйте позже.")
+		return
+	}
+
+	// Формируем финальный ответ
+	response := fmt.Sprintf("🔍 **Персональный инсайт (%d неделя)**\n\n%s", week, strings.TrimSpace(insightResponse))
+
+	// Сохраняем в историю
+	err = b.history.SaveMessage(userID, username, "Запрос персонального инсайта", insightResponse, "gpt-4o-mini")
+	if err != nil {
+		log.Printf("Ошибка сохранения инсайта в историю: %v", err)
+	}
+
+	// Отправляем инсайт пользователю
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
+// handleDiaryViewCallback обрабатывает нажатие кнопки "Посмотреть свои записи"
+func (b *Bot) handleDiaryViewCallback(callbackQuery *tgbotapi.CallbackQuery) {
+	// Получаем список активных недель
+	activeWeeks := b.exercises.GetActiveWeeks()
+
+	if len(activeWeeks) == 0 {
+		response := "👀 **Просмотр записей**\n\n" +
+			"⚠️ В данный момент нет доступных недель для просмотра записей.\n" +
+			"Администраторы еще не открыли доступ к неделям."
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+
+	response := "👀 **Просмотр записей дневника**\n\n" +
+		"Выберите неделю для просмотра ваших записей:"
+
+	// Создаем кнопки только для активных недель
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	var currentRow []tgbotapi.InlineKeyboardButton
+
+	weekEmojis := []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣"}
+
+	for _, week := range activeWeeks {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("%s Неделя %d", weekEmojis[week-1], week),
+			fmt.Sprintf("diary_view_week_%d", week),
+		)
+		currentRow = append(currentRow, button)
+
+		// Добавляем по 2 кнопки в ряд
+		if len(currentRow) == 2 {
+			buttons = append(buttons, currentRow)
+			currentRow = []tgbotapi.InlineKeyboardButton{}
+		}
+	}
+
+	// Добавляем оставшиеся кнопки
+	if len(currentRow) > 0 {
+		buttons = append(buttons, currentRow)
+	}
+
+	viewKeyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = viewKeyboard
+	b.telegram.Send(msg)
+}
+
+// handleDiaryViewWeekCallback обрабатывает просмотр записей конкретной недели
+func (b *Bot) handleDiaryViewWeekCallback(callbackQuery *tgbotapi.CallbackQuery, week int) {
+	userID := callbackQuery.From.ID
+
+	// Получаем все записи пользователя для этой недели из всех типов
+	var allEntries []history.DiaryEntry
+
+	// Читаем из всех типов дневников
+	typeDirs := []string{"diary_questions", "diary_jointquestions", "diary_thoughts"}
+	typeNames := map[string]string{
+		"diary_questions":     "💪 Ответы на упражнения",
+		"diary_jointquestions": "👫 Совместные вопросы",
+		"diary_thoughts":      "💭 Личные мысли",
+	}
+
+	for _, typeDir := range typeDirs {
+		entries, err := b.getDiaryEntriesByTypeAndWeek(userID, typeDir, week)
+		if err == nil {
+			allEntries = append(allEntries, entries...)
+		}
+	}
+
+	// Также проверяем старые файлы для совместимости
+	oldEntries, err := b.history.GetDiaryEntriesByWeek(userID, week)
+	if err == nil {
+		allEntries = append(allEntries, oldEntries...)
+	}
+
+	if len(allEntries) == 0 {
+		response := fmt.Sprintf("👀 **Записи за %d неделю**\n\n" +
+			"📝 У вас пока нет записей за эту неделю.\n" +
+			"Начните писать дневник, чтобы увидеть здесь свои записи!", week)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+
+	// Группируем записи по типам
+	entriesByType := make(map[string][]history.DiaryEntry)
+	for _, entry := range allEntries {
+		entriesByType[entry.Type] = append(entriesByType[entry.Type], entry)
+	}
+
+	// Формируем ответ
+	response := fmt.Sprintf("👀 **Ваши записи за %d неделю**\n\n", week)
+
+	for entryType, entries := range entriesByType {
+		typeName := typeNames["diary_"+entryType]
+		if typeName == "" {
+			switch entryType {
+			case "questions":
+				typeName = "💪 Ответы на упражнения"
+			case "joint":
+				typeName = "👫 Совместные вопросы"
+			case "personal":
+				typeName = "💭 Личные мысли"
+			default:
+				typeName = "📝 Записи"
+			}
+		}
+
+		response += fmt.Sprintf("**%s:**\n", typeName)
+		for i, entry := range entries {
+			// Обрезаем длинные записи для краткого просмотра
+			entryText := entry.Entry
+			if len(entryText) > 200 {
+				entryText = entryText[:200] + "..."
+			}
+			response += fmt.Sprintf("%d. %s\n", i+1, entryText)
+		}
+		response += "\n"
+	}
+
+	response += "💡 *Для добавления новых записей используйте основное меню дневника*"
+
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
+// getDiaryEntriesByTypeAndWeek получает записи дневника конкретного типа и недели
+func (b *Bot) getDiaryEntriesByTypeAndWeek(userID int64, typeDir string, week int) ([]history.DiaryEntry, error) {
+	filename := filepath.Join("diary_entries", typeDir, fmt.Sprintf("user_%d.json", userID))
+	
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return []history.DiaryEntry{}, nil // Возвращаем пустой массив если файла нет
+	}
+	
+	var entries []history.DiaryEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, err
+	}
+	
+	// Фильтруем по неделе
+	var weekEntries []history.DiaryEntry
+	for _, entry := range entries {
+		if entry.Week == week {
+			weekEntries = append(weekEntries, entry)
+		}
+	}
+	
+	return weekEntries, nil
 }

@@ -62,8 +62,13 @@ func (m *Manager) SaveMessage(userID int64, username, message, response, model s
 		Model:     model,
 	}
 
-	// Создаем файл для каждого пользователя
-	filename := filepath.Join(m.historyDir, fmt.Sprintf("user_%d.json", userID))
+	// Создаем папку для пользователя
+	userDir := filepath.Join(m.historyDir, fmt.Sprintf("user_%d", userID))
+	if err := os.MkdirAll(userDir, 0755); err != nil {
+		return fmt.Errorf("ошибка создания папки пользователя: %w", err)
+	}
+	
+	filename := filepath.Join(userDir, "chat.json")
 	
 	// Читаем существующую историю
 	var history []ChatMessage
@@ -98,7 +103,16 @@ func (m *Manager) SaveMessage(userID int64, username, message, response, model s
 
 // GetUserHistory получает историю пользователя
 func (m *Manager) GetUserHistory(userID int64, limit int) ([]ChatMessage, error) {
-	filename := filepath.Join(m.historyDir, fmt.Sprintf("user_%d.json", userID))
+	userDir := filepath.Join(m.historyDir, fmt.Sprintf("user_%d", userID))
+	filename := filepath.Join(userDir, "chat.json")
+	
+	// Для совместимости со старым форматом
+	oldFilename := filepath.Join(m.historyDir, fmt.Sprintf("user_%d.json", userID))
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		if _, err := os.Stat(oldFilename); err == nil {
+			filename = oldFilename
+		}
+	}
 	
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -157,11 +171,65 @@ func (m *Manager) GetStats(userID int64) (int, time.Time, error) {
 
 // ClearUserHistory очищает историю конкретного пользователя
 func (m *Manager) ClearUserHistory(userID int64) error {
-	filename := filepath.Join(m.historyDir, fmt.Sprintf("user_%d.json", userID))
+	userDir := filepath.Join(m.historyDir, fmt.Sprintf("user_%d", userID))
+	filename := filepath.Join(userDir, "chat.json")
 	return os.Remove(filename)
 }
 
-// SaveDiaryEntry сохраняет запись в дневник
+// GetDiaryEntriesByWeek получает записи дневника для конкретной недели (только questions и personal)
+func (m *Manager) GetDiaryEntriesByWeek(userID int64, week int) ([]DiaryEntry, error) {
+	var allWeekEntries []DiaryEntry
+	
+	// Читаем записи из папки "diary_questions"
+	questionsFile := filepath.Join(m.diaryDir, "diary_questions", fmt.Sprintf("user_%d.json", userID))
+	if data, err := os.ReadFile(questionsFile); err == nil {
+		var questionsEntries []DiaryEntry
+		if err := json.Unmarshal(data, &questionsEntries); err == nil {
+			for _, entry := range questionsEntries {
+				if entry.Week == week {
+					allWeekEntries = append(allWeekEntries, entry)
+				}
+			}
+		}
+	}
+	
+	// Читаем записи из папки "diary_thoughts"
+	thoughtsFile := filepath.Join(m.diaryDir, "diary_thoughts", fmt.Sprintf("user_%d.json", userID))
+	if data, err := os.ReadFile(thoughtsFile); err == nil {
+		var thoughtsEntries []DiaryEntry
+		if err := json.Unmarshal(data, &thoughtsEntries); err == nil {
+			for _, entry := range thoughtsEntries {
+				if entry.Week == week {
+					allWeekEntries = append(allWeekEntries, entry)
+				}
+			}
+		}
+	}
+	
+	// Для совместимости со старыми записями - читаем из старых файлов
+	oldFiles := []string{
+		filepath.Join(m.diaryDir, fmt.Sprintf("diary_questions_%d.json", userID)),
+		filepath.Join(m.diaryDir, fmt.Sprintf("diary_personal_%d.json", userID)),
+		filepath.Join(m.diaryDir, fmt.Sprintf("diary_%d.json", userID)),
+	}
+	
+	for _, oldFile := range oldFiles {
+		if data, err := os.ReadFile(oldFile); err == nil {
+			var oldEntries []DiaryEntry
+			if err := json.Unmarshal(data, &oldEntries); err == nil {
+				for _, entry := range oldEntries {
+					if entry.Week == week && (entry.Type == "questions" || entry.Type == "personal") {
+						allWeekEntries = append(allWeekEntries, entry)
+					}
+				}
+			}
+		}
+	}
+	
+	return allWeekEntries, nil
+}
+
+// SaveDiaryEntry сохраняет запись в дневник (в отдельные файлы по типам)
 func (m *Manager) SaveDiaryEntry(userID int64, username, entry string, week int, entryType string) error {
 	diaryEntry := DiaryEntry{
 		Timestamp: time.Now(),
@@ -172,8 +240,28 @@ func (m *Manager) SaveDiaryEntry(userID int64, username, entry string, week int,
 		Type:      entryType,
 	}
 
-	// Создаем файл дневника для каждого пользователя
-	filename := filepath.Join(m.diaryDir, fmt.Sprintf("diary_%d.json", userID))
+	// Определяем папку и файл в зависимости от типа записи
+	var typeDir, filename string
+	switch entryType {
+	case "questions":
+		typeDir = filepath.Join(m.diaryDir, "diary_questions")
+		filename = filepath.Join(typeDir, fmt.Sprintf("user_%d.json", userID))
+	case "joint":
+		typeDir = filepath.Join(m.diaryDir, "diary_jointquestions")
+		filename = filepath.Join(typeDir, fmt.Sprintf("user_%d.json", userID))
+	case "personal":
+		typeDir = filepath.Join(m.diaryDir, "diary_thoughts")
+		filename = filepath.Join(typeDir, fmt.Sprintf("user_%d.json", userID))
+	default:
+		// Для совместимости со старыми записями
+		typeDir = m.diaryDir
+		filename = filepath.Join(typeDir, fmt.Sprintf("diary_%d.json", userID))
+	}
+	
+	// Создаем папку для типа записи
+	if err := os.MkdirAll(typeDir, 0755); err != nil {
+		return fmt.Errorf("ошибка создания папки типа записи: %w", err)
+	}
 	
 	// Читаем существующие записи дневника
 	var diary []DiaryEntry
@@ -236,10 +324,34 @@ func (m *Manager) GetDiaryStats(userID int64) (int, time.Time, error) {
 	return totalEntries, firstEntry, nil
 }
 
-// ClearUserDiary очищает дневник конкретного пользователя
+// ClearUserDiary очищает дневник конкретного пользователя (все типы файлов)
 func (m *Manager) ClearUserDiary(userID int64) error {
-	filename := filepath.Join(m.diaryDir, fmt.Sprintf("diary_%d.json", userID))
-	return os.Remove(filename)
+	// Удаляем файлы пользователя из всех папок типов
+	typeDirs := []string{
+		"diary_questions",
+		"diary_jointquestions", 
+		"diary_thoughts",
+	}
+	
+	for _, typeDir := range typeDirs {
+		filename := filepath.Join(m.diaryDir, typeDir, fmt.Sprintf("user_%d.json", userID))
+		os.Remove(filename) // Игнорируем ошибки если файла нет
+	}
+	
+	// Также удаляем старые файлы для совместимости
+	oldFiles := []string{
+		fmt.Sprintf("diary_%d.json", userID),
+		fmt.Sprintf("diary_questions_%d.json", userID),
+		fmt.Sprintf("diary_joint_%d.json", userID),
+		fmt.Sprintf("diary_personal_%d.json", userID),
+	}
+	
+	for _, file := range oldFiles {
+		filename := filepath.Join(m.diaryDir, file)
+		os.Remove(filename) // Игнорируем ошибки для старых файлов
+	}
+	
+	return nil
 }
 
 
