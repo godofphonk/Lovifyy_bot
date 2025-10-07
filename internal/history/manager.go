@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -240,6 +242,7 @@ func (m *Manager) ClearUserDiary(userID int64) error {
 	return os.Remove(filename)
 }
 
+
 // OpenAIMessage представляет сообщение в формате OpenAI
 type OpenAIMessage struct {
 	Role    string `json:"role"`    // "system", "user", "assistant"
@@ -280,11 +283,12 @@ func (m *Manager) GetOpenAIHistory(userID int64, systemPrompt string, limit int)
 			Content: msg.Message,
 		})
 
-		// Добавляем ответ ассистента
+		// Добавляем ответ ассистента (очищаем от блоков <think>)
 		if msg.Response != "" {
+			cleanedResponse := m.cleanResponse(msg.Response)
 			openaiMessages = append(openaiMessages, OpenAIMessage{
 				Role:    "assistant",
-				Content: msg.Response,
+				Content: cleanedResponse,
 			})
 		}
 	}
@@ -295,4 +299,33 @@ func (m *Manager) GetOpenAIHistory(userID int64, systemPrompt string, limit int)
 // SaveOpenAIMessage сохраняет сообщение в формате совместимом с OpenAI
 func (m *Manager) SaveOpenAIMessage(userID int64, username, userMessage, assistantResponse, model string) error {
 	return m.SaveMessage(userID, username, userMessage, assistantResponse, model)
+}
+
+// cleanResponse очищает ответ от блоков размышлений и лишнего текста
+func (m *Manager) cleanResponse(response string) string {
+	// Удаляем блоки <think>...</think> (включая многострочные)
+	thinkRegex := regexp.MustCompile(`(?s)<think>.*?</think>`)
+	cleaned := thinkRegex.ReplaceAllString(response, "")
+	
+	// Удаляем блоки </think> без открывающего тега (на случай ошибок парсинга)
+	thinkEndRegex := regexp.MustCompile(`(?s).*?</think>`)
+	cleaned = thinkEndRegex.ReplaceAllString(cleaned, "")
+	
+	// Удаляем строки, содержащие только </think>
+	thinkLineRegex := regexp.MustCompile(`(?m)^.*</think>.*$\n?`)
+	cleaned = thinkLineRegex.ReplaceAllString(cleaned, "")
+	
+	// Удаляем лишние пробелы и переносы строк в начале и конце
+	cleaned = strings.TrimSpace(cleaned)
+	
+	// Удаляем множественные пустые строки
+	multipleNewlines := regexp.MustCompile(`\n\s*\n\s*\n`)
+	cleaned = multipleNewlines.ReplaceAllString(cleaned, "\n\n")
+	
+	// Если после очистки остался пустой ответ, возвращаем исходный
+	if cleaned == "" {
+		return response
+	}
+	
+	return cleaned
 }
