@@ -239,3 +239,60 @@ func (m *Manager) ClearUserDiary(userID int64) error {
 	filename := filepath.Join(m.diaryDir, fmt.Sprintf("diary_%d.json", userID))
 	return os.Remove(filename)
 }
+
+// OpenAIMessage представляет сообщение в формате OpenAI
+type OpenAIMessage struct {
+	Role    string `json:"role"`    // "system", "user", "assistant"
+	Content string `json:"content"`
+}
+
+// GetOpenAIHistory возвращает историю в формате OpenAI с ограничением
+func (m *Manager) GetOpenAIHistory(userID int64, systemPrompt string, limit int) ([]OpenAIMessage, error) {
+	// Загружаем обычную историю
+	messages, err := m.GetUserHistory(userID, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	var openaiMessages []OpenAIMessage
+
+	// Добавляем системный промпт в начало
+	if systemPrompt != "" {
+		openaiMessages = append(openaiMessages, OpenAIMessage{
+			Role:    "system",
+			Content: systemPrompt,
+		})
+	}
+
+	// Берем последние N сообщений (если limit > 0)
+	startIdx := 0
+	if limit > 0 && len(messages) > limit {
+		startIdx = len(messages) - limit
+	}
+
+	// Конвертируем в формат OpenAI
+	for i := startIdx; i < len(messages); i++ {
+		msg := messages[i]
+		
+		// Добавляем сообщение пользователя
+		openaiMessages = append(openaiMessages, OpenAIMessage{
+			Role:    "user",
+			Content: msg.Message,
+		})
+
+		// Добавляем ответ ассистента
+		if msg.Response != "" {
+			openaiMessages = append(openaiMessages, OpenAIMessage{
+				Role:    "assistant",
+				Content: msg.Response,
+			})
+		}
+	}
+
+	return openaiMessages, nil
+}
+
+// SaveOpenAIMessage сохраняет сообщение в формате совместимом с OpenAI
+func (m *Manager) SaveOpenAIMessage(userID int64, username, userMessage, assistantResponse, model string) error {
+	return m.SaveMessage(userID, username, userMessage, assistantResponse, model)
+}

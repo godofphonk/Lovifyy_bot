@@ -48,6 +48,6 @@ func main() {
 	telegramBot := bot.NewBot(botToken, systemPrompt, adminIDs)
 	log.Println("🚀 Lovifyy Bot запущен...")
 	log.Println("💾 История сохраняется для каждого пользователя")
-	log.Println("🤖 Используется локальная модель: Qwen 3:8B")
+	log.Println("🤖 Используется OpenAI модель: GPT-4o-mini")
 	telegramBot.Start()
 }

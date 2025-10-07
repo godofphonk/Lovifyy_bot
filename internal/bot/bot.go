@@ -75,7 +75,7 @@ func (b *Bot) getUserState(userID int64) string {
 // Bot представляет Telegram бота с ИИ
 type Bot struct {
 	telegram     *tgbotapi.BotAPI
-	ai           *ai.OllamaClient
+	ai           *ai.OpenAIClient
 	history      *history.Manager
 	exercises    *exercises.Manager
 	rateLimiter  *RateLimiter
@@ -115,8 +115,8 @@ func NewBot(telegramToken, systemPrompt string, adminIDs []int64) *Bot {
 		log.Println("✅ Команды для меню установлены!")
 	}
 
-	// Инициализируем AI клиента (используем легкую модель)
-	aiClient := ai.NewOllamaClient("gemma3:1b")
+	// Инициализируем AI клиента (используем OpenAI)
+	aiClient := ai.NewOpenAIClient("gpt-4o-mini")
 	
 	// Проверяем доступность AI
 	if err := aiClient.TestConnection(); err != nil {
@@ -1238,18 +1238,32 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 	typing := tgbotapi.NewChatAction(message.Chat.ID, tgbotapi.ChatTyping)
 	b.telegram.Send(typing)
 
-	// Получаем контекст из истории (последние 5 сообщений)
-	context := b.history.GetRecentContext(userID, 5)
-	
-	// Формируем промпт с системным промптом и контекстом
-	prompt := b.systemPrompt + "\n\n"
-	if context != "" {
-		prompt += context + "\n"
+	// Получаем историю в формате OpenAI (последние 10 сообщений)
+	openaiMessages, err := b.history.GetOpenAIHistory(userID, b.systemPrompt, 10)
+	if err != nil {
+		log.Printf("Ошибка получения истории: %v", err)
+		openaiMessages = []history.OpenAIMessage{
+			{Role: "system", Content: b.systemPrompt},
+		}
 	}
-	prompt += fmt.Sprintf("Пользователь: %s\nБот:", message.Text)
+	
+	// Добавляем новое сообщение пользователя
+	openaiMessages = append(openaiMessages, history.OpenAIMessage{
+		Role:    "user",
+		Content: message.Text,
+	})
 
-	// Получаем ответ от ИИ
-	response, err := b.ai.Generate(prompt)
+	// Конвертируем в формат AI клиента
+	aiMessages := make([]ai.OpenAIMessage, len(openaiMessages))
+	for i, msg := range openaiMessages {
+		aiMessages[i] = ai.OpenAIMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	// Получаем ответ от OpenAI с полной историей
+	response, err := b.ai.GenerateWithHistory(aiMessages)
 	if err != nil {
 		log.Printf("Ошибка получения ответа от ИИ: %v", err)
 		b.sendMessage(message.Chat.ID, "Извините, произошла ошибка при обработке вашего сообщения. Попробуйте еще раз.")
@@ -1260,7 +1274,7 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 	response = strings.TrimSpace(response)
 	
 	// Сохраняем в историю
-	err = b.history.SaveMessage(userID, username, message.Text, response, "gemma3:1b")
+	err = b.history.SaveMessage(userID, username, message.Text, response, "gpt-4o-mini")
 	if err != nil {
 		log.Printf("Ошибка сохранения в историю: %v", err)
 	}
