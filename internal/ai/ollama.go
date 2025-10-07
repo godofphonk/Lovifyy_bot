@@ -62,11 +62,11 @@ func (c *OllamaClient) Generate(prompt string) (string, error) {
 
 	// Создаем HTTP клиент с таймаутом
 	client := &http.Client{
-		Timeout: 60 * time.Second, // Таймаут 60 секунд для генерации
+		Timeout: 120 * time.Second, // Таймаут 120 секунд для генерации
 	}
 	
 	// Создаем контекст с таймаутом
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	
 	// Создаем запрос с контекстом
