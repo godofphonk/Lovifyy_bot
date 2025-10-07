@@ -240,7 +240,7 @@ func (m *Manager) SaveDiaryEntry(userID int64, username, entry string, week int,
 		Type:      entryType,
 	}
 
-	// Определяем папку и файл в зависимости от типа записи
+	// Определяем папку и файл в зависимости от типа записи (без гендера для совместимости)
 	var typeDir, filename string
 	switch entryType {
 	case "questions":
@@ -259,6 +259,58 @@ func (m *Manager) SaveDiaryEntry(userID int64, username, entry string, week int,
 	}
 	
 	// Создаем папку для типа записи
+	if err := os.MkdirAll(typeDir, 0755); err != nil {
+		return fmt.Errorf("ошибка создания папки типа записи: %w", err)
+	}
+	
+	// Читаем существующие записи дневника
+	var diary []DiaryEntry
+	if data, err := os.ReadFile(filename); err == nil {
+		json.Unmarshal(data, &diary)
+	}
+
+	// Добавляем новую запись
+	diary = append(diary, diaryEntry)
+
+	// Сохраняем обновленный дневник
+	data, err := json.MarshalIndent(diary, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filename, data, 0644)
+}
+
+// SaveDiaryEntryWithGender сохраняет запись в дневник с указанием гендера
+func (m *Manager) SaveDiaryEntryWithGender(userID int64, username, entry string, week int, entryType, gender string) error {
+	diaryEntry := DiaryEntry{
+		Timestamp: time.Now(),
+		UserID:    userID,
+		Username:  username,
+		Entry:     entry,
+		Week:      week,
+		Type:      entryType,
+	}
+
+	// Определяем папку и файл в зависимости от типа записи и гендера
+	var typeDir, filename string
+	switch entryType {
+	case "questions":
+		typeDir = filepath.Join(m.diaryDir, "diary_questions", gender)
+		filename = filepath.Join(typeDir, fmt.Sprintf("user_%d.json", userID))
+	case "joint":
+		typeDir = filepath.Join(m.diaryDir, "diary_jointquestions", gender)
+		filename = filepath.Join(typeDir, fmt.Sprintf("user_%d.json", userID))
+	case "personal":
+		typeDir = filepath.Join(m.diaryDir, "diary_thoughts", gender)
+		filename = filepath.Join(typeDir, fmt.Sprintf("user_%d.json", userID))
+	default:
+		// Для совместимости со старыми записями
+		typeDir = filepath.Join(m.diaryDir, gender)
+		filename = filepath.Join(typeDir, fmt.Sprintf("diary_%d.json", userID))
+	}
+	
+	// Создаем папку для типа записи и гендера
 	if err := os.MkdirAll(typeDir, 0755); err != nil {
 		return fmt.Errorf("ошибка создания папки типа записи: %w", err)
 	}

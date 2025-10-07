@@ -279,6 +279,10 @@ func (b *Bot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 		b.handleDiaryCallback(callbackQuery)
 	case "diary_view":
 		b.handleDiaryViewCallback(callbackQuery)
+	case "diary_gender_male":
+		b.handleDiaryGenderCallback(callbackQuery, "male")
+	case "diary_gender_female":
+		b.handleDiaryGenderCallback(callbackQuery, "female")
 	case "week_1":
 		b.handleWeekCallback(callbackQuery, 1)
 	case "week_2":
@@ -330,38 +334,66 @@ func (b *Bot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 			}
 		}
 
-		// Проверяем, не является ли это callback для дневника
+		// Проверяем, не является ли это callback для дневника с гендером
 		if strings.HasPrefix(data, "diary_week_") {
 			parts := strings.Split(data, "_")
-			if len(parts) >= 3 {
-				week, err := strconv.Atoi(parts[2])
-				if err == nil && week >= 1 && week <= 4 {
-					b.handleDiaryWeekCallback(callbackQuery, week)
+			if len(parts) >= 4 { // diary_week_[gender]_[week]
+				gender := parts[2]
+				week, err := strconv.Atoi(parts[3])
+				if err == nil && week >= 1 && week <= 4 && (gender == "male" || gender == "female") {
+					b.handleDiaryWeekGenderCallback(callbackQuery, gender, week)
 					return
 				}
 			}
 		}
 
-		// Проверяем, не является ли это callback для типа записи дневника
+		// Проверяем, не является ли это callback для типа записи дневника с гендером
 		if strings.HasPrefix(data, "diary_") && strings.Contains(data, "_type_") {
 			parts := strings.Split(data, "_")
-			if len(parts) >= 4 {
-				week, err := strconv.Atoi(parts[1])
-				if err == nil && week >= 1 && week <= 4 {
-					entryType := strings.Join(parts[3:], "_")
-					b.handleDiaryTypeCallback(callbackQuery, week, entryType)
+			if len(parts) >= 5 { // diary_[gender]_[week]_type_[entryType]
+				gender := parts[1]
+				week, err := strconv.Atoi(parts[2])
+				if err == nil && week >= 1 && week <= 4 && (gender == "male" || gender == "female") {
+					entryType := strings.Join(parts[4:], "_")
+					b.handleDiaryTypeGenderCallback(callbackQuery, gender, week, entryType)
 					return
 				}
 			}
 		}
 
-		// Проверяем, не является ли это callback для просмотра записей недели
-		if strings.HasPrefix(data, "diary_view_week_") {
+		// Проверяем, не является ли это callback для просмотра записей с гендером
+		if strings.HasPrefix(data, "diary_view_gender_") {
 			parts := strings.Split(data, "_")
 			if len(parts) >= 4 {
-				week, err := strconv.Atoi(parts[3])
-				if err == nil && week >= 1 && week <= 4 {
-					b.handleDiaryViewWeekCallback(callbackQuery, week)
+				gender := parts[3]
+				if gender == "male" || gender == "female" {
+					b.handleDiaryViewGenderCallback(callbackQuery, gender)
+					return
+				}
+			}
+		}
+
+		// Проверяем, не является ли это callback для просмотра записей недели с гендером
+		if strings.HasPrefix(data, "diary_view_week_") {
+			parts := strings.Split(data, "_")
+			if len(parts) >= 5 { // diary_view_week_[gender]_[week]
+				gender := parts[3]
+				week, err := strconv.Atoi(parts[4])
+				if err == nil && week >= 1 && week <= 4 && (gender == "male" || gender == "female") {
+					b.handleDiaryViewWeekGenderCallback(callbackQuery, gender, week)
+					return
+				}
+			}
+		}
+
+		// Проверяем, не является ли это callback для инсайта с гендером
+		if strings.HasPrefix(data, "insight_") {
+			parts := strings.Split(data, "_")
+			if len(parts) >= 3 { // insight_[gender]_[week]
+				gender := parts[1]
+				week, err := strconv.Atoi(parts[2])
+				if err == nil && week >= 1 && week <= 4 && (gender == "male" || gender == "female") {
+					b.generatePersonalInsightWithGender(callbackQuery, gender, week)
 					return
 				}
 			}
@@ -534,8 +566,8 @@ func (b *Bot) handleWeekActionCallback(callbackQuery *tgbotapi.CallbackQuery, we
 		}
 
 	case "insights":
-		// Генерируем персональный инсайт на основе истории пользователя
-		b.generatePersonalInsight(callbackQuery, week)
+		// Показываем выбор гендера для инсайта
+		b.handleInsightGenderChoice(callbackQuery, week)
 		return
 
 	case "joint":
@@ -573,37 +605,18 @@ func (b *Bot) handleDiaryCallback(callbackQuery *tgbotapi.CallbackQuery) {
 	}
 
 	response := "📝 **Мини дневник**\n\n" +
-		"Выберите доступную неделю для записи:"
+		"Сначала выберите, за кого вы хотите заполнить дневник:"
 
-	// Создаем кнопки только для активных недель
-	var buttons [][]tgbotapi.InlineKeyboardButton
-	var currentRow []tgbotapi.InlineKeyboardButton
-
-	weekEmojis := []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣"}
-
-	for _, week := range activeWeeks {
-		button := tgbotapi.NewInlineKeyboardButtonData(
-			fmt.Sprintf("%s Неделя", weekEmojis[week-1]),
-			fmt.Sprintf("diary_week_%d", week),
-		)
-		currentRow = append(currentRow, button)
-
-		// Добавляем по 2 кнопки в ряд
-		if len(currentRow) == 2 {
-			buttons = append(buttons, currentRow)
-			currentRow = []tgbotapi.InlineKeyboardButton{}
-		}
+	// Создаем кнопки выбора гендера
+	buttons := [][]tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("👨 Парень", "diary_gender_male"),
+			tgbotapi.NewInlineKeyboardButtonData("👩 Девушка", "diary_gender_female"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("👀 Посмотреть записи", "diary_view"),
+		),
 	}
-
-	// Добавляем оставшиеся кнопки
-	if len(currentRow) > 0 {
-		buttons = append(buttons, currentRow)
-	}
-
-	// Добавляем кнопку "Посмотреть свои записи"
-	buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("👀 Посмотреть свои записи", "diary_view"),
-	))
 
 	diaryKeyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
 
@@ -1209,15 +1222,16 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 
 	// Если пользователь в режиме дневника, сохраняем в отдельный файл дневника
 	if strings.HasPrefix(userState, "diary_") {
-		// Парсим состояние: diary_<week>_<type>
+		// Парсим состояние: diary_<gender>_<week>_<type>
 		parts := strings.Split(userState, "_")
-		if len(parts) >= 3 {
-			week, err := strconv.Atoi(parts[1])
-			if err == nil && week >= 1 && week <= 4 {
-				entryType := strings.Join(parts[2:], "_")
+		if len(parts) >= 4 {
+			gender := parts[1]
+			week, err := strconv.Atoi(parts[2])
+			if err == nil && week >= 1 && week <= 4 && (gender == "male" || gender == "female") {
+				entryType := strings.Join(parts[3:], "_")
 
-				// Сохраняем запись в дневник с указанием недели и типа
-				err := b.history.SaveDiaryEntry(userID, username, message.Text, week, entryType)
+				// Сохраняем запись в дневник с указанием недели, типа и гендера
+				err := b.history.SaveDiaryEntryWithGender(userID, username, message.Text, week, entryType, gender)
 				if err != nil {
 					log.Printf("Ошибка сохранения записи дневника: %v", err)
 					b.sendMessage(message.Chat.ID, "❌ Ошибка сохранения записи в дневник")
@@ -1467,31 +1481,14 @@ func (b *Bot) handleDiaryViewCallback(callbackQuery *tgbotapi.CallbackQuery) {
 	}
 
 	response := "👀 **Просмотр записей дневника**\n\n" +
-		"Выберите неделю для просмотра ваших записей:"
+		"Сначала выберите, чьи записи хотите посмотреть:"
 
-	// Создаем кнопки только для активных недель
-	var buttons [][]tgbotapi.InlineKeyboardButton
-	var currentRow []tgbotapi.InlineKeyboardButton
-
-	weekEmojis := []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣"}
-
-	for _, week := range activeWeeks {
-		button := tgbotapi.NewInlineKeyboardButtonData(
-			fmt.Sprintf("%s Неделя %d", weekEmojis[week-1], week),
-			fmt.Sprintf("diary_view_week_%d", week),
-		)
-		currentRow = append(currentRow, button)
-
-		// Добавляем по 2 кнопки в ряд
-		if len(currentRow) == 2 {
-			buttons = append(buttons, currentRow)
-			currentRow = []tgbotapi.InlineKeyboardButton{}
-		}
-	}
-
-	// Добавляем оставшиеся кнопки
-	if len(currentRow) > 0 {
-		buttons = append(buttons, currentRow)
+	// Создаем кнопки выбора гендера для просмотра
+	buttons := [][]tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("👨 Записи парня", "diary_view_gender_male"),
+			tgbotapi.NewInlineKeyboardButtonData("👩 Записи девушки", "diary_view_gender_female"),
+		),
 	}
 
 	viewKeyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
@@ -1601,4 +1598,460 @@ func (b *Bot) getDiaryEntriesByTypeAndWeek(userID int64, typeDir string, week in
 	}
 	
 	return weekEntries, nil
+}
+
+// handleDiaryGenderCallback обрабатывает выбор гендера для дневника
+func (b *Bot) handleDiaryGenderCallback(callbackQuery *tgbotapi.CallbackQuery, gender string) {
+	// Получаем список активных недель
+	activeWeeks := b.exercises.GetActiveWeeks()
+
+	if len(activeWeeks) == 0 {
+		genderName := "парня"
+		if gender == "female" {
+			genderName = "девушки"
+		}
+		response := fmt.Sprintf("📝 **Дневник для %s**\n\n" +
+			"⚠️ В данный момент нет доступных недель для записей.\n" +
+			"Администраторы еще не открыли доступ к неделям.", genderName)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+
+	genderName := "парня"
+	genderEmoji := "👨"
+	if gender == "female" {
+		genderName = "девушки"
+		genderEmoji = "👩"
+	}
+
+	response := fmt.Sprintf("%s **Дневник для %s**\n\n" +
+		"Выберите доступную неделю для записи:", genderEmoji, genderName)
+
+	// Создаем кнопки только для активных недель
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	var currentRow []tgbotapi.InlineKeyboardButton
+
+	weekEmojis := []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣"}
+
+	for _, week := range activeWeeks {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("%s Неделя %d", weekEmojis[week-1], week),
+			fmt.Sprintf("diary_week_%s_%d", gender, week),
+		)
+		currentRow = append(currentRow, button)
+
+		// Добавляем по 2 кнопки в ряд
+		if len(currentRow) == 2 {
+			buttons = append(buttons, currentRow)
+			currentRow = []tgbotapi.InlineKeyboardButton{}
+		}
+	}
+
+	// Добавляем оставшиеся кнопки
+	if len(currentRow) > 0 {
+		buttons = append(buttons, currentRow)
+	}
+
+	diaryKeyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = diaryKeyboard
+	b.telegram.Send(msg)
+}
+
+// handleDiaryWeekGenderCallback обрабатывает выбор недели для дневника с гендером
+func (b *Bot) handleDiaryWeekGenderCallback(callbackQuery *tgbotapi.CallbackQuery, gender string, week int) {
+	// Проверяем, активна ли неделя
+	if !b.exercises.IsWeekActive(week) {
+		response := fmt.Sprintf("❌ **Неделя %d недоступна**\n\n" +
+			"Эта неделя еще не открыта администраторами.", week)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+
+	genderName := "парня"
+	genderEmoji := "👨"
+	if gender == "female" {
+		genderName = "девушки"
+		genderEmoji = "👩"
+	}
+
+	response := fmt.Sprintf("%s **Дневник для %s - %d неделя**\n\n" +
+		"Выберите тип записи:", genderEmoji, genderName, week)
+
+	// Создаем кнопки для типов записей
+	typeKeyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💪 Ответы на упражнения", fmt.Sprintf("diary_%s_%d_type_questions", gender, week)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("👫 Совместные вопросы", fmt.Sprintf("diary_%s_%d_type_joint", gender, week)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💭 Личные мысли", fmt.Sprintf("diary_%s_%d_type_personal", gender, week)),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = typeKeyboard
+	b.telegram.Send(msg)
+}
+
+// handleDiaryTypeGenderCallback обрабатывает выбор типа записи с гендером
+func (b *Bot) handleDiaryTypeGenderCallback(callbackQuery *tgbotapi.CallbackQuery, gender string, week int, entryType string) {
+	userID := callbackQuery.From.ID
+
+	// Устанавливаем состояние пользователя для дневника с гендером
+	b.setUserState(userID, fmt.Sprintf("diary_%s_%d_%s", gender, week, entryType))
+
+	var response string
+	var typeName string
+	genderName := "парня"
+	if gender == "female" {
+		genderName = "девушки"
+	}
+
+	switch entryType {
+	case "questions":
+		typeName = "ответы на упражнения"
+		response = fmt.Sprintf("💪 **Ответы на упражнения для %s (%d неделя)**\n\n" +
+			"Напишите ваши ответы на упражнения этой недели. " +
+			"Будьте честными и открытыми в своих ответах.", genderName, week)
+	case "joint":
+		typeName = "совместные вопросы"
+		response = fmt.Sprintf("👫 **Совместные вопросы для %s (%d неделя)**\n\n" +
+			"Напишите ваши ответы на совместные вопросы. " +
+			"Эти записи помогут вам лучше понять друг друга.", genderName, week)
+	case "personal":
+		typeName = "личные мысли"
+		response = fmt.Sprintf("💭 **Личные мысли для %s (%d неделя)**\n\n" +
+			"Поделитесь своими личными мыслями и переживаниями. " +
+			"Это пространство только для ваших размышлений.", genderName, week)
+	default:
+		typeName = "записи"
+		response = fmt.Sprintf("📝 **Записи для %s (%d неделя)**\n\n" +
+			"Напишите ваши мысли и наблюдения.", genderName, week)
+	}
+
+	log.Printf("Пользователь %d начал запись в дневник: %s, неделя %d, тип %s, гендер %s", 
+		userID, typeName, week, entryType, gender)
+
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
+// handleDiaryViewGenderCallback обрабатывает выбор гендера для просмотра записей
+func (b *Bot) handleDiaryViewGenderCallback(callbackQuery *tgbotapi.CallbackQuery, gender string) {
+	// Получаем список активных недель
+	activeWeeks := b.exercises.GetActiveWeeks()
+
+	if len(activeWeeks) == 0 {
+		genderName := "парня"
+		if gender == "female" {
+			genderName = "девушки"
+		}
+		response := fmt.Sprintf("👀 **Записи %s**\n\n" +
+			"⚠️ В данный момент нет доступных недель для просмотра записей.\n" +
+			"Администраторы еще не открыли доступ к неделям.", genderName)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+
+	genderName := "парня"
+	genderEmoji := "👨"
+	if gender == "female" {
+		genderName = "девушки"
+		genderEmoji = "👩"
+	}
+
+	response := fmt.Sprintf("%s **Записи %s**\n\n" +
+		"Выберите неделю для просмотра записей:", genderEmoji, genderName)
+
+	// Создаем кнопки только для активных недель
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	var currentRow []tgbotapi.InlineKeyboardButton
+
+	weekEmojis := []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣"}
+
+	for _, week := range activeWeeks {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("%s Неделя %d", weekEmojis[week-1], week),
+			fmt.Sprintf("diary_view_week_%s_%d", gender, week),
+		)
+		currentRow = append(currentRow, button)
+
+		// Добавляем по 2 кнопки в ряд
+		if len(currentRow) == 2 {
+			buttons = append(buttons, currentRow)
+			currentRow = []tgbotapi.InlineKeyboardButton{}
+		}
+	}
+
+	// Добавляем оставшиеся кнопки
+	if len(currentRow) > 0 {
+		buttons = append(buttons, currentRow)
+	}
+
+	viewKeyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = viewKeyboard
+	b.telegram.Send(msg)
+}
+
+// handleDiaryViewWeekGenderCallback обрабатывает просмотр записей конкретной недели с гендером
+func (b *Bot) handleDiaryViewWeekGenderCallback(callbackQuery *tgbotapi.CallbackQuery, gender string, week int) {
+	userID := callbackQuery.From.ID
+
+	// Получаем все записи пользователя для этой недели из всех типов с учетом гендера
+	var allEntries []history.DiaryEntry
+
+	// Читаем из всех типов дневников с гендером
+	typeDirs := []string{"diary_questions", "diary_jointquestions", "diary_thoughts"}
+	typeNames := map[string]string{
+		"diary_questions":     "💪 Ответы на упражнения",
+		"diary_jointquestions": "👫 Совместные вопросы",
+		"diary_thoughts":      "💭 Личные мысли",
+	}
+
+	for _, typeDir := range typeDirs {
+		entries, err := b.getDiaryEntriesByTypeWeekAndGender(userID, typeDir, week, gender)
+		if err == nil {
+			allEntries = append(allEntries, entries...)
+		}
+	}
+
+	// Также проверяем старые файлы для совместимости
+	oldEntries, err := b.history.GetDiaryEntriesByWeek(userID, week)
+	if err == nil {
+		allEntries = append(allEntries, oldEntries...)
+	}
+
+	genderName := "парня"
+	genderEmoji := "👨"
+	if gender == "female" {
+		genderName = "девушки"
+		genderEmoji = "👩"
+	}
+
+	if len(allEntries) == 0 {
+		response := fmt.Sprintf("%s **Записи %s за %d неделю**\n\n" +
+			"📝 Пока нет записей за эту неделю.\n" +
+			"Начните писать дневник, чтобы увидеть здесь записи!", genderEmoji, genderName, week)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+
+	// Группируем записи по типам
+	entriesByType := make(map[string][]history.DiaryEntry)
+	for _, entry := range allEntries {
+		entriesByType[entry.Type] = append(entriesByType[entry.Type], entry)
+	}
+
+	// Формируем ответ
+	response := fmt.Sprintf("%s **Записи %s за %d неделю**\n\n", genderEmoji, genderName, week)
+
+	for entryType, entries := range entriesByType {
+		typeName := typeNames["diary_"+entryType]
+		if typeName == "" {
+			switch entryType {
+			case "questions":
+				typeName = "💪 Ответы на упражнения"
+			case "joint":
+				typeName = "👫 Совместные вопросы"
+			case "personal":
+				typeName = "💭 Личные мысли"
+			default:
+				typeName = "📝 Записи"
+			}
+		}
+
+		response += fmt.Sprintf("**%s:**\n", typeName)
+		for i, entry := range entries {
+			// Обрезаем длинные записи для краткого просмотра
+			entryText := entry.Entry
+			if len(entryText) > 200 {
+				entryText = entryText[:200] + "..."
+			}
+			response += fmt.Sprintf("%d. %s\n", i+1, entryText)
+		}
+		response += "\n"
+	}
+
+	response += "💡 *Для добавления новых записей используйте основное меню дневника*"
+
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
+// getDiaryEntriesByTypeWeekAndGender получает записи дневника конкретного типа, недели и гендера
+func (b *Bot) getDiaryEntriesByTypeWeekAndGender(userID int64, typeDir string, week int, gender string) ([]history.DiaryEntry, error) {
+	filename := filepath.Join("diary_entries", typeDir, gender, fmt.Sprintf("user_%d.json", userID))
+	
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return []history.DiaryEntry{}, nil // Возвращаем пустой массив если файла нет
+	}
+	
+	var entries []history.DiaryEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, err
+	}
+	
+	// Фильтруем по неделе
+	var weekEntries []history.DiaryEntry
+	for _, entry := range entries {
+		if entry.Week == week {
+			weekEntries = append(weekEntries, entry)
+		}
+	}
+	
+	return weekEntries, nil
+}
+
+// handleInsightGenderChoice показывает выбор гендера для генерации инсайта
+func (b *Bot) handleInsightGenderChoice(callbackQuery *tgbotapi.CallbackQuery, week int) {
+	response := fmt.Sprintf("🔍 **Персональный инсайт (%d неделя)**\n\n" +
+		"Для кого вы хотите получить персональный инсайт?", week)
+
+	// Создаем кнопки выбора гендера
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("👨 Для парня", fmt.Sprintf("insight_male_%d", week)),
+			tgbotapi.NewInlineKeyboardButtonData("👩 Для девушки", fmt.Sprintf("insight_female_%d", week)),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = keyboard
+	b.telegram.Send(msg)
+}
+
+// generatePersonalInsightWithGender генерирует персональный инсайт с учетом гендера
+func (b *Bot) generatePersonalInsightWithGender(callbackQuery *tgbotapi.CallbackQuery, gender string, week int) {
+	userID := callbackQuery.From.ID
+	username := callbackQuery.From.UserName
+	if username == "" {
+		username = callbackQuery.From.FirstName
+	}
+
+	// Отправляем индикатор печати
+	typing := tgbotapi.NewChatAction(callbackQuery.Message.Chat.ID, tgbotapi.ChatTyping)
+	b.telegram.Send(typing)
+
+	// Получаем записи дневника для конкретной недели с учетом гендера
+	diaryEntries, err := b.getDiaryEntriesByWeekAndGender(userID, week, gender)
+	if err != nil || len(diaryEntries) == 0 {
+		genderName := "парня"
+		if gender == "female" {
+			genderName = "девушки"
+		}
+		// Если нет записей в дневнике для этой недели, показываем сообщение
+		response := fmt.Sprintf("🔍 **Персональный инсайт для %s (%d неделя)**\n\n" +
+			"Для создания персонального инсайта для %s в %d неделе мне нужны записи в дневнике. " +
+			"Сначала сделайте записи в дневнике для этой недели, а затем вернитесь к инсайту.\n\n" +
+			"📝 Используйте кнопку \"Мини дневник\" для записи мыслей", genderName, genderName, week)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+
+	// Формируем контекст из записей дневника
+	var diaryContext string
+	for _, entry := range diaryEntries {
+		var entryTypeName string
+		switch entry.Type {
+		case "questions":
+			entryTypeName = "Ответы на упражнения"
+		case "joint":
+			entryTypeName = "Совместные вопросы"
+		case "personal":
+			entryTypeName = "Личные записи"
+		default:
+			entryTypeName = "Запись"
+		}
+		diaryContext += fmt.Sprintf("%s: %s\n\n", entryTypeName, entry.Entry)
+	}
+
+	genderName := "парня"
+	if gender == "female" {
+		genderName = "девушки"
+	}
+
+	// Создаем сообщения для OpenAI
+	openaiMessages := []history.OpenAIMessage{
+		{
+			Role:    "system",
+			Content: b.systemPrompt,
+		},
+		{
+			Role:    "user",
+			Content: fmt.Sprintf("Вот записи из дневника для %s за %d неделю:\n\n%s", genderName, week, diaryContext),
+		},
+	}
+
+	// Добавляем специальный запрос для генерации инсайта
+	insightPrompt := "После анализа записей составь краткое резюме в следующем формате:\n\n" +
+		"«Судя по записям, вы цените [качества] и чаще всего испытываете [чувство/тревогу] в ситуациях, когда [описание ситуации]. Обсудите вместе, как это влияет на ваши отношения».\n\n" +
+		"Проанализируй записи и дай персональный инсайт именно в этом формате."
+
+	openaiMessages = append(openaiMessages, history.OpenAIMessage{
+		Role:    "user",
+		Content: insightPrompt,
+	})
+
+	// Конвертируем в формат AI клиента
+	aiMessages := make([]ai.OpenAIMessage, len(openaiMessages))
+	for i, msg := range openaiMessages {
+		aiMessages[i] = ai.OpenAIMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	// Получаем инсайт от OpenAI
+	insightResponse, err := b.ai.GenerateWithHistory(aiMessages)
+	if err != nil {
+		log.Printf("Ошибка генерации инсайта: %v", err)
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Ошибка при генерации персонального инсайта. Попробуйте позже.")
+		return
+	}
+
+	// Формируем финальный ответ
+	response := fmt.Sprintf("🔍 **Персональный инсайт для %s (%d неделя)**\n\n%s", genderName, week, strings.TrimSpace(insightResponse))
+
+	// Сохраняем в историю
+	err = b.history.SaveMessage(userID, username, fmt.Sprintf("Запрос персонального инсайта для %s", genderName), insightResponse, "gpt-4o-mini")
+	if err != nil {
+		log.Printf("Ошибка сохранения инсайта в историю: %v", err)
+	}
+
+	// Отправляем инсайт пользователю
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
+// getDiaryEntriesByWeekAndGender получает записи дневника для недели с учетом гендера
+func (b *Bot) getDiaryEntriesByWeekAndGender(userID int64, week int, gender string) ([]history.DiaryEntry, error) {
+	var allWeekEntries []history.DiaryEntry
+	
+	// Читаем записи из папки "diary_questions" с гендером
+	questionsEntries, err := b.getDiaryEntriesByTypeWeekAndGender(userID, "diary_questions", week, gender)
+	if err == nil {
+		allWeekEntries = append(allWeekEntries, questionsEntries...)
+	}
+	
+	// Читаем записи из папки "diary_thoughts" с гендером
+	thoughtsEntries, err := b.getDiaryEntriesByTypeWeekAndGender(userID, "diary_thoughts", week, gender)
+	if err == nil {
+		allWeekEntries = append(allWeekEntries, thoughtsEntries...)
+	}
+	
+	// Для совместимости со старыми записями - читаем из старых файлов
+	oldEntries, err := b.history.GetDiaryEntriesByWeek(userID, week)
+	if err == nil {
+		for _, entry := range oldEntries {
+			if entry.Type == "questions" || entry.Type == "personal" {
+				allWeekEntries = append(allWeekEntries, entry)
+			}
+		}
+	}
+	
+	return allWeekEntries, nil
 }
