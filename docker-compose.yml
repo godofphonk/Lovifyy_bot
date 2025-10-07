@@ -25,14 +25,11 @@ services:
   lovifyy_bot:
     build: .
     container_name: lovifyy_bot
-    depends_on:
-      ollama:
-        condition: service_healthy
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SYSTEM_PROMPT=${SYSTEM_PROMPT}
       - ADMIN_IDS=${ADMIN_IDS}
-      - OLLAMA_URL=http://ollama:11434
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       - ./chat_history:/app/chat_history
       - ./diary_entries:/app/diary_entries
