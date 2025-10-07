@@ -428,14 +428,14 @@ func (b *Bot) handleAdviceCallback(callbackQuery *tgbotapi.CallbackQuery) {
 	activeWeeks := b.exercises.GetActiveWeeks()
 
 	if len(activeWeeks) == 0 {
-		response := "🗓️ **Упражнения недели**\n\n" +
+		response := "🗓️ Упражнения недели\n\n" +
 			"⚠️ В данный момент нет доступных недель.\n" +
 			"Администраторы еще не открыли доступ к упражнениям."
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
 	}
 
-	response := "🗓️ **Выберите доступную неделю:**\n\n" +
+	response := "🗓️ Выберите доступную неделю:\n\n" +
 		"Каждая неделя содержит специально подобранные упражнения для укрепления ваших отношений."
 
 	// Создаем кнопки только для активных недель
@@ -474,7 +474,7 @@ func (b *Bot) handleAdviceCallback(callbackQuery *tgbotapi.CallbackQuery) {
 func (b *Bot) handleWeekCallback(callbackQuery *tgbotapi.CallbackQuery, week int) {
 	// Проверяем, активна ли неделя
 	if !b.exercises.IsWeekActive(week) {
-		response := fmt.Sprintf("🗓️ **Упражнения для %d недели**\n\n⚠️ Доступ к этой неделе закрыт администраторами.\n\nПожалуйста, выберите доступную неделю.", week)
+		response := fmt.Sprintf("🗓️ Упражнения для %d недели\n\n⚠️ Доступ к этой неделе закрыт администраторами.\n\nПожалуйста, выберите доступную неделю.", week)
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
 	}
@@ -489,7 +489,7 @@ func (b *Bot) handleWeekCallback(callbackQuery *tgbotapi.CallbackQuery, week int
 
 	// Если упражнения не настроены, показываем сообщение
 	if exercise == nil {
-		response := fmt.Sprintf("🗓️ **Упражнения для %d недели**\n\n⚠️ Упражнения для этой недели еще не настроены администраторами.\n\nПожалуйста, обратитесь к администратору или попробуйте позже.", week)
+		response := fmt.Sprintf("🗓️ Упражнения для %d недели\n\n⚠️ Упражнения для этой недели еще не настроены администраторами.\n\nПожалуйста, обратитесь к администратору или попробуйте позже.", week)
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
 	}
@@ -553,16 +553,16 @@ func (b *Bot) handleWeekActionCallback(callbackQuery *tgbotapi.CallbackQuery, we
 	switch action {
 	case "questions":
 		if exercise.Questions != "" {
-			response = fmt.Sprintf("💪 **Упражнения для %d недели**\n\n%s", week, exercise.Questions)
+			response = fmt.Sprintf("💪 Упражнения для %d недели\n\n%s", week, exercise.Questions)
 		} else {
 			response = "💪 Упражнения для этой недели еще не настроены"
 		}
 
 	case "tips":
 		if exercise.Tips != "" {
-			response = fmt.Sprintf("💡 **Подсказки для %d недели**\n\n%s", week, exercise.Tips)
+			response = fmt.Sprintf("💡 Подсказки для %d недели\n\n%s", week, exercise.Tips)
 		} else {
-			response = "💡 **Подсказки**\n\n• Будьте открыты друг с другом\n• Слушайте внимательно\n• Не судите, а поддерживайте\n• Делитесь своими чувствами честно"
+			response = "💡 Подсказки\n\n• Будьте открыты друг с другом\n• Слушайте внимательно\n• Не судите, а поддерживайте\n• Делитесь своими чувствами честно"
 		}
 
 	case "insights":
@@ -572,14 +572,14 @@ func (b *Bot) handleWeekActionCallback(callbackQuery *tgbotapi.CallbackQuery, we
 
 	case "joint":
 		if exercise.JointQuestions != "" {
-			response = fmt.Sprintf("👫 **Совместные вопросы для %d недели**\n\n%s", week, exercise.JointQuestions)
+			response = fmt.Sprintf("👫 Совместные вопросы для %d недели\n\n%s", week, exercise.JointQuestions)
 		} else {
 			response = "👫 Совместные вопросы для этой недели еще не настроены"
 		}
 
 	case "diary":
 		if exercise.DiaryInstructions != "" {
-			response = fmt.Sprintf("📝 **Что писать в дневнике (%d неделя)**\n\n%s", week, exercise.DiaryInstructions)
+			response = fmt.Sprintf("📝 Что писать в дневнике (%d неделя)\n\n%s", week, exercise.DiaryInstructions)
 		} else {
 			response = "📝 Инструкции для дневника еще не настроены"
 		}
@@ -597,14 +597,14 @@ func (b *Bot) handleDiaryCallback(callbackQuery *tgbotapi.CallbackQuery) {
 	activeWeeks := b.exercises.GetActiveWeeks()
 
 	if len(activeWeeks) == 0 {
-		response := "📝 **Мини дневник**\n\n" +
+		response := "📝 Мини дневник\n\n" +
 			"⚠️ В данный момент нет доступных недель для записей.\n" +
 			"Администраторы еще не открыли доступ к неделям."
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
 	}
 
-	response := "📝 **Мини дневник**\n\n" +
+	response := "📝 Мини дневник\n\n" +
 		"Сначала выберите, за кого вы хотите заполнить дневник:"
 
 	// Создаем кнопки выбора гендера
@@ -629,12 +629,12 @@ func (b *Bot) handleDiaryCallback(callbackQuery *tgbotapi.CallbackQuery) {
 func (b *Bot) handleDiaryWeekCallback(callbackQuery *tgbotapi.CallbackQuery, week int) {
 	// Проверяем, активна ли неделя
 	if !b.exercises.IsWeekActive(week) {
-		response := fmt.Sprintf("📝 **Дневник - %d неделя**\n\n⚠️ Доступ к записям этой недели закрыт администраторами.\n\nПожалуйста, выберите доступную неделю.", week)
+		response := fmt.Sprintf("📝 Дневник - %d неделя\n\n⚠️ Доступ к записям этой недели закрыт администраторами.\n\nПожалуйста, выберите доступную неделю.", week)
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
 	}
 
-	response := fmt.Sprintf("📝 **Дневник - %d неделя**\n\n"+
+	response := fmt.Sprintf("📝 Дневник - %d неделя\n\n"+
 		"Выберите тип записи:", week)
 
 	// Создаем кнопки для типов записей
@@ -671,11 +671,11 @@ func (b *Bot) handleDiaryTypeCallback(callbackQuery *tgbotapi.CallbackQuery, wee
 		// Получаем вопросы для этой недели
 		exercise, err := b.exercises.GetWeekExercise(week)
 		if err == nil && exercise != nil && exercise.Questions != "" {
-			response = fmt.Sprintf("❓ **%s (%d неделя)**\n\n"+
-				"**Напоминание вопросов:**\n%s\n\n"+
+			response = fmt.Sprintf("❓ %s (%d неделя)\n\n"+
+				"Напоминание вопросов:\n%s\n\n"+
 				"Теперь напишите свои ответы на эти вопросы:", typeName, week, exercise.Questions)
 		} else {
-			response = fmt.Sprintf("❓ **%s (%d неделя)**\n\n"+
+			response = fmt.Sprintf("❓ %s (%d неделя)\n\n"+
 				"Напишите свои ответы на вопросы недели:", typeName, week)
 		}
 
@@ -684,11 +684,11 @@ func (b *Bot) handleDiaryTypeCallback(callbackQuery *tgbotapi.CallbackQuery, wee
 		// Получаем совместные вопросы для этой недели
 		exercise, err := b.exercises.GetWeekExercise(week)
 		if err == nil && exercise != nil && exercise.JointQuestions != "" {
-			response = fmt.Sprintf("👫 **%s (%d неделя)**\n\n"+
-				"**Напоминание совместных вопросов:**\n%s\n\n"+
+			response = fmt.Sprintf("👫 %s (%d неделя)\n\n"+
+				"Напоминание совместных вопросов:\n%s\n\n"+
 				"Теперь напишите ваши совместные ответы и обсуждения:", typeName, week, exercise.JointQuestions)
 		} else {
-			response = fmt.Sprintf("👫 **%s (%d неделя)**\n\n"+
+			response = fmt.Sprintf("👫 %s (%d неделя)\n\n"+
 				"Напишите ваши ответы на совместные вопросы:", typeName, week)
 		}
 
@@ -697,11 +697,11 @@ func (b *Bot) handleDiaryTypeCallback(callbackQuery *tgbotapi.CallbackQuery, wee
 		// Получаем инструкции для дневника
 		exercise, err := b.exercises.GetWeekExercise(week)
 		if err == nil && exercise != nil && exercise.DiaryInstructions != "" {
-			response = fmt.Sprintf("💭 **%s (%d неделя)**\n\n"+
-				"**Рекомендации для записей:**\n%s\n\n"+
+			response = fmt.Sprintf("💭 %s (%d неделя)\n\n"+
+				"Рекомендации для записей:\n%s\n\n"+
 				"Напишите свои личные мысли и размышления:", typeName, week, exercise.DiaryInstructions)
 		} else {
-			response = fmt.Sprintf("💭 **%s (%d неделя)**\n\n"+
+			response = fmt.Sprintf("💭 %s (%d неделя)\n\n"+
 				"Напишите свои личные мысли и размышления:", typeName, week)
 		}
 
@@ -721,7 +721,7 @@ func (b *Bot) handleAdminHelpCallback(callbackQuery *tgbotapi.CallbackQuery) {
 		return
 	}
 
-	response := "👑 **Админ-панель Lovifyy Bot**\n\n" +
+	response := "👑 Админ-панель Lovifyy Bot\n\n" +
 		"🔧 Доступные команды:\n" +
 		"/setprompt <текст> - изменить системный промпт\n" +
 		"/prompt - посмотреть текущий промпт\n" +
@@ -756,7 +756,7 @@ func (b *Bot) handlePromptCallback(callbackQuery *tgbotapi.CallbackQuery) {
 		return
 	}
 
-	response := fmt.Sprintf("🤖 **Текущий системный промпт:**\n\n%s\n\n💡 Для изменения используйте:\n/setprompt <новый промпт>", b.systemPrompt)
+	response := fmt.Sprintf("🤖 Текущий системный промпт:\n\n%s\n\n💡 Для изменения используйте:\n/setprompt <новый промпт>", b.systemPrompt)
 	b.sendMessage(callbackQuery.Message.Chat.ID, response)
 }
 
@@ -769,15 +769,15 @@ func (b *Bot) handleSetPromptMenuCallback(callbackQuery *tgbotapi.CallbackQuery)
 		return
 	}
 
-	response := "✏️ **Изменение системного промпта**\n\n" +
+	response := "✏️ Изменение системного промпта\n\n" +
 		"Отправьте команду в формате:\n" +
 		"`/setprompt <новый промпт>`\n\n" +
-		"💡 **Готовые варианты:**\n\n" +
-		"**Психолог:**\n" +
+		"💡 Готовые варианты:\n\n" +
+		"Психолог:\n" +
 		"`/setprompt Ты опытный психолог, который помогает людям с их личными проблемами. Будь сочувствующим и давай полезные советы.`\n\n" +
-		"**Дружелюбный помощник:**\n" +
+		"Дружелюбный помощник:\n" +
 		"`/setprompt Ты дружелюбный помощник, готовый ответить на любые вопросы. Будь позитивным и полезным.`\n\n" +
-		"**Программист:**\n" +
+		"Программист:\n" +
 		"`/setprompt Ты программист-эксперт, специализирующийся на Go и веб-разработке. Помогай с кодом и объясняй концепции.`"
 	b.sendMessage(callbackQuery.Message.Chat.ID, response)
 }
@@ -791,7 +791,7 @@ func (b *Bot) handleExercisesMenuCallback(callbackQuery *tgbotapi.CallbackQuery)
 		return
 	}
 
-	response := "🗓️ **Настройка упражнений**\n\n" +
+	response := "🗓️ Настройка упражнений\n\n" +
 		"Выберите неделю для настройки упражнений:"
 
 	// Создаем клавиатуру с выбором недель для настройки
@@ -833,7 +833,7 @@ func (b *Bot) handleExerciseWeekCallback(callbackQuery *tgbotapi.CallbackQuery, 
 		status = "❌ Не настроено"
 	}
 
-	response := fmt.Sprintf("🗓️ **Настройка %d недели** (%s)\n\n"+
+	response := fmt.Sprintf("🗓️ Настройка %d недели (%s)\n\n"+
 		"Выберите элемент для настройки:", week, status)
 
 	// Создаем кнопки для настройки элементов недели
@@ -904,10 +904,10 @@ func (b *Bot) handleAdminWeekFieldCallback(callbackQuery *tgbotapi.CallbackQuery
 		return
 	}
 
-	response := fmt.Sprintf("🗓️ **Настройка: %s (%d неделя)**\n\n"+
+	response := fmt.Sprintf("🗓️ Настройка: %s (%d неделя)\n\n"+
 		"Используйте команду:\n"+
 		"`/setweek %d %s <текст>`\n\n"+
-		"**Пример:**\n"+
+		"Пример:\n"+
 		"`%s`", fieldName, week, week, field, example)
 
 	b.sendMessage(callbackQuery.Message.Chat.ID, response)
@@ -959,7 +959,7 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		b.sendMessage(message.Chat.ID, response)
 
 	case "advice":
-		response := "🗓️ **Выберите неделю для упражнений:**\n\n" +
+		response := "🗓️ Выберите неделю для упражнений:\n\n" +
 			"Каждая неделя содержит специально подобранные упражнения для укрепления ваших отношений."
 
 		// Создаем клавиатуру с выбором недель
@@ -983,14 +983,14 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		activeWeeks := b.exercises.GetActiveWeeks()
 
 		if len(activeWeeks) == 0 {
-			response := "📝 **Мини дневник**\n\n" +
+			response := "📝 Мини дневник\n\n" +
 				"⚠️ В данный момент нет доступных недель для записей.\n" +
 				"Администраторы еще не открыли доступ к неделям."
 			b.sendMessage(message.Chat.ID, response)
 			return
 		}
 
-		response := "📝 **Мини дневник**\n\n" +
+		response := "📝 Мини дневник\n\n" +
 			"Выберите доступную неделю для записи:"
 
 		// Создаем кнопки только для активных недель
@@ -1100,7 +1100,7 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			fieldName = field
 		}
 
-		response := fmt.Sprintf("✅ %s для %d недели успешно сохранен!\n\n📝 **%s:**\n%s", fieldName, week, fieldName, value)
+		response := fmt.Sprintf("✅ %s для %d недели успешно сохранен!\n\n📝 %s:\n%s", fieldName, week, fieldName, value)
 		b.sendMessage(message.Chat.ID, response)
 		log.Printf("👑 Администратор %d настроил %s для недели %d", userID, field, week)
 
@@ -1110,7 +1110,7 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			return
 		}
 
-		response := "👑 **Админ-панель Lovifyy Bot**\n\n" +
+		response := "👑 Админ-панель Lovifyy Bot\n\n" +
 			"🔧 Доступные команды:\n" +
 			"/setprompt <текст> - изменить системный промпт\n" +
 			"/prompt - посмотреть текущий промпт\n" +
@@ -1125,7 +1125,7 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			"• joint - совместные вопросы\n" +
 			"• diary - инструкции для дневника\n" +
 			"• active - открыть/закрыть доступ (true/false)\n\n" +
-			"**Примеры:**\n" +
+			"Примеры:\n" +
 			"`/setweek 1 title Неделя знакомства`\n" +
 			"`/setweek 3 active true` - открыть 3 неделю\n" +
 			"`/setweek 2 active false` - закрыть 2 неделю\n\n" +
@@ -1154,7 +1154,7 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			return
 		}
 
-		response := fmt.Sprintf("🤖 **Текущий системный промпт:**\n\n%s\n\n💡 Для изменения используйте:\n/setprompt <новый промпт>", b.systemPrompt)
+		response := fmt.Sprintf("🤖 Текущий системный промпт:\n\n%s\n\n💡 Для изменения используйте:\n/setprompt <новый промпт>", b.systemPrompt)
 		b.sendMessage(message.Chat.ID, response)
 
 	case "setprompt_menu":
@@ -1163,15 +1163,15 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			return
 		}
 
-		response := "✏️ **Изменение системного промпта**\n\n" +
+		response := "✏️ Изменение системного промпта\n\n" +
 			"Отправьте команду в формате:\n" +
 			"`/setprompt <новый промпт>`\n\n" +
-			"💡 **Готовые варианты:**\n\n" +
-			"**Психолог:**\n" +
+			"💡 Готовые варианты:\n\n" +
+			"Психолог:\n" +
 			"`/setprompt Ты опытный психолог, который помогает людям с их личными проблемами. Будь сочувствующим и давай полезные советы.`\n\n" +
-			"**Дружелюбный помощник:**\n" +
+			"Дружелюбный помощник:\n" +
 			"`/setprompt Ты дружелюбный помощник, готовый ответить на любые вопросы. Будь позитивным и полезным.`\n\n" +
-			"**Программист:**\n" +
+			"Программист:\n" +
 			"`/setprompt Ты программист-эксперт, специализирующийся на Go и веб-разработке. Помогай с кодом и объясняй концепции.`"
 		b.sendMessage(message.Chat.ID, response)
 
@@ -1187,19 +1187,19 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		// Сбрасываем состояние пользователя
 		b.setUserState(userID, "")
 
-		response := "🗑️ **История очищена!**\n\n" +
+		response := "🗑️ История очищена!\n\n" +
 			"Ваша история сообщений была полностью удалена. " +
 			"Теперь мы можем начать общение с чистого листа!\n\n" +
 			"Используйте /start для выбора режима работы."
 		b.sendMessage(message.Chat.ID, response)
 
 	case "help":
-		response := "🤖 **Справка по Lovifyy Bot:**\n\n" +
-			"💬 **/chat** - режим обычной беседы\n" +
-			"🗓️ **/advice** - упражнения недели\n" +
-			"📝 **/diary** - мини дневник\n" +
-			"🗑️ **/clear** - очистить историю\n" +
-			"🚀 **/start** - главное меню\n\n" +
+		response := "🤖 Справка по Lovifyy Bot:\n\n" +
+			"💬 /chat - режим обычной беседы\n" +
+			"🗓️ /advice - упражнения недели\n" +
+			"📝 /diary - мини дневник\n" +
+			"🗑️ /clear - очистить историю\n" +
+			"🚀 /start - главное меню\n\n" +
 			"Просто напишите мне сообщение для общения!"
 		b.sendMessage(message.Chat.ID, response)
 
@@ -1390,9 +1390,9 @@ func (b *Bot) generatePersonalInsight(callbackQuery *tgbotapi.CallbackQuery, wee
 	diaryEntries, err := b.history.GetDiaryEntriesByWeek(userID, week)
 	if err != nil || len(diaryEntries) == 0 {
 		// Если нет записей в дневнике для этой недели, показываем сообщение
-		response := fmt.Sprintf("🔍 **Персональный инсайт (%d неделя)**\n\n" +
-			"Для создания персонального инсайта для %d недели мне нужны ваши записи в дневнике. " +
-			"Сначала сделайте записи в дневнике для этой недели, а затем вернитесь к инсайту.\n\n" +
+		response := fmt.Sprintf("🔍 Персональный инсайт (%d неделя)\n\n"+
+			"Для создания персонального инсайта для %d недели мне нужны ваши записи в дневнике. "+
+			"Сначала сделайте записи в дневнике для этой недели, а затем вернитесь к инсайту.\n\n"+
 			"📝 Используйте кнопку \"Что писать в дневнике\" для получения инструкций", week, week)
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
@@ -1455,7 +1455,7 @@ func (b *Bot) generatePersonalInsight(callbackQuery *tgbotapi.CallbackQuery, wee
 	}
 
 	// Формируем финальный ответ
-	response := fmt.Sprintf("🔍 **Персональный инсайт (%d неделя)**\n\n%s", week, strings.TrimSpace(insightResponse))
+	response := fmt.Sprintf("🔍 Персональный инсайт (%d неделя)\n\n%s", week, strings.TrimSpace(insightResponse))
 
 	// Сохраняем в историю
 	err = b.history.SaveMessage(userID, username, "Запрос персонального инсайта", insightResponse, "gpt-4o-mini")
@@ -1473,14 +1473,14 @@ func (b *Bot) handleDiaryViewCallback(callbackQuery *tgbotapi.CallbackQuery) {
 	activeWeeks := b.exercises.GetActiveWeeks()
 
 	if len(activeWeeks) == 0 {
-		response := "👀 **Просмотр записей**\n\n" +
+		response := "👀 Просмотр записей\n\n" +
 			"⚠️ В данный момент нет доступных недель для просмотра записей.\n" +
 			"Администраторы еще не открыли доступ к неделям."
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
 	}
 
-	response := "👀 **Просмотр записей дневника**\n\n" +
+	response := "👀 Просмотр записей дневника\n\n" +
 		"Сначала выберите, чьи записи хотите посмотреть:"
 
 	// Создаем кнопки выбора гендера для просмотра
@@ -1508,9 +1508,9 @@ func (b *Bot) handleDiaryViewWeekCallback(callbackQuery *tgbotapi.CallbackQuery,
 	// Читаем из всех типов дневников
 	typeDirs := []string{"diary_questions", "diary_jointquestions", "diary_thoughts"}
 	typeNames := map[string]string{
-		"diary_questions":     "💪 Ответы на упражнения",
+		"diary_questions":      "💪 Ответы на упражнения",
 		"diary_jointquestions": "👫 Совместные вопросы",
-		"diary_thoughts":      "💭 Личные мысли",
+		"diary_thoughts":       "💭 Личные мысли",
 	}
 
 	for _, typeDir := range typeDirs {
@@ -1527,8 +1527,8 @@ func (b *Bot) handleDiaryViewWeekCallback(callbackQuery *tgbotapi.CallbackQuery,
 	}
 
 	if len(allEntries) == 0 {
-		response := fmt.Sprintf("👀 **Записи за %d неделю**\n\n" +
-			"📝 У вас пока нет записей за эту неделю.\n" +
+		response := fmt.Sprintf("👀 Записи за %d неделю\n\n"+
+			"📝 У вас пока нет записей за эту неделю.\n"+
 			"Начните писать дневник, чтобы увидеть здесь свои записи!", week)
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
@@ -1541,7 +1541,7 @@ func (b *Bot) handleDiaryViewWeekCallback(callbackQuery *tgbotapi.CallbackQuery,
 	}
 
 	// Формируем ответ
-	response := fmt.Sprintf("👀 **Ваши записи за %d неделю**\n\n", week)
+	response := fmt.Sprintf("👀 Ваши записи за %d неделю\n\n", week)
 
 	for entryType, entries := range entriesByType {
 		typeName := typeNames["diary_"+entryType]
@@ -1558,7 +1558,7 @@ func (b *Bot) handleDiaryViewWeekCallback(callbackQuery *tgbotapi.CallbackQuery,
 			}
 		}
 
-		response += fmt.Sprintf("**%s:**\n", typeName)
+		response += fmt.Sprintf("%s:\n", typeName)
 		for i, entry := range entries {
 			// Обрезаем длинные записи для краткого просмотра
 			entryText := entry.Entry
@@ -1578,17 +1578,17 @@ func (b *Bot) handleDiaryViewWeekCallback(callbackQuery *tgbotapi.CallbackQuery,
 // getDiaryEntriesByTypeAndWeek получает записи дневника конкретного типа и недели
 func (b *Bot) getDiaryEntriesByTypeAndWeek(userID int64, typeDir string, week int) ([]history.DiaryEntry, error) {
 	filename := filepath.Join("diary_entries", typeDir, fmt.Sprintf("user_%d.json", userID))
-	
+
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return []history.DiaryEntry{}, nil // Возвращаем пустой массив если файла нет
 	}
-	
+
 	var entries []history.DiaryEntry
 	if err := json.Unmarshal(data, &entries); err != nil {
 		return nil, err
 	}
-	
+
 	// Фильтруем по неделе
 	var weekEntries []history.DiaryEntry
 	for _, entry := range entries {
@@ -1596,7 +1596,7 @@ func (b *Bot) getDiaryEntriesByTypeAndWeek(userID int64, typeDir string, week in
 			weekEntries = append(weekEntries, entry)
 		}
 	}
-	
+
 	return weekEntries, nil
 }
 
@@ -1610,8 +1610,8 @@ func (b *Bot) handleDiaryGenderCallback(callbackQuery *tgbotapi.CallbackQuery, g
 		if gender == "female" {
 			genderName = "девушки"
 		}
-		response := fmt.Sprintf("📝 **Дневник для %s**\n\n" +
-			"⚠️ В данный момент нет доступных недель для записей.\n" +
+		response := fmt.Sprintf("📝 Дневник для %s\n\n"+
+			"⚠️ В данный момент нет доступных недель для записей.\n"+
 			"Администраторы еще не открыли доступ к неделям.", genderName)
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
@@ -1624,7 +1624,7 @@ func (b *Bot) handleDiaryGenderCallback(callbackQuery *tgbotapi.CallbackQuery, g
 		genderEmoji = "👩"
 	}
 
-	response := fmt.Sprintf("%s **Дневник для %s**\n\n" +
+	response := fmt.Sprintf("%s Дневник для %s\n\n"+
 		"Выберите доступную неделю для записи:", genderEmoji, genderName)
 
 	// Создаем кнопки только для активных недель
@@ -1663,7 +1663,7 @@ func (b *Bot) handleDiaryGenderCallback(callbackQuery *tgbotapi.CallbackQuery, g
 func (b *Bot) handleDiaryWeekGenderCallback(callbackQuery *tgbotapi.CallbackQuery, gender string, week int) {
 	// Проверяем, активна ли неделя
 	if !b.exercises.IsWeekActive(week) {
-		response := fmt.Sprintf("❌ **Неделя %d недоступна**\n\n" +
+		response := fmt.Sprintf("❌ Неделя %d недоступна\n\n"+
 			"Эта неделя еще не открыта администраторами.", week)
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
@@ -1676,7 +1676,7 @@ func (b *Bot) handleDiaryWeekGenderCallback(callbackQuery *tgbotapi.CallbackQuer
 		genderEmoji = "👩"
 	}
 
-	response := fmt.Sprintf("%s **Дневник для %s - %d неделя**\n\n" +
+	response := fmt.Sprintf("%s Дневник для %s - %d неделя\n\n"+
 		"Выберите тип записи:", genderEmoji, genderName, week)
 
 	// Создаем кнопки для типов записей
@@ -1714,26 +1714,26 @@ func (b *Bot) handleDiaryTypeGenderCallback(callbackQuery *tgbotapi.CallbackQuer
 	switch entryType {
 	case "questions":
 		typeName = "ответы на упражнения"
-		response = fmt.Sprintf("💪 **Ответы на упражнения для %s (%d неделя)**\n\n" +
-			"Напишите ваши ответы на упражнения этой недели. " +
+		response = fmt.Sprintf("💪 Ответы на упражнения для %s (%d неделя)\n\n"+
+			"Напишите ваши ответы на упражнения этой недели. "+
 			"Будьте честными и открытыми в своих ответах.", genderName, week)
 	case "joint":
 		typeName = "совместные вопросы"
-		response = fmt.Sprintf("👫 **Совместные вопросы для %s (%d неделя)**\n\n" +
-			"Напишите ваши ответы на совместные вопросы. " +
+		response = fmt.Sprintf("👫 Совместные вопросы для %s (%d неделя)\n\n"+
+			"Напишите ваши ответы на совместные вопросы. "+
 			"Эти записи помогут вам лучше понять друг друга.", genderName, week)
 	case "personal":
 		typeName = "личные мысли"
-		response = fmt.Sprintf("💭 **Личные мысли для %s (%d неделя)**\n\n" +
-			"Поделитесь своими личными мыслями и переживаниями. " +
+		response = fmt.Sprintf("💭 Личные мысли для %s (%d неделя)\n\n"+
+			"Поделитесь своими личными мыслями и переживаниями. "+
 			"Это пространство только для ваших размышлений.", genderName, week)
 	default:
 		typeName = "записи"
-		response = fmt.Sprintf("📝 **Записи для %s (%d неделя)**\n\n" +
+		response = fmt.Sprintf("📝 Записи для %s (%d неделя)\n\n"+
 			"Напишите ваши мысли и наблюдения.", genderName, week)
 	}
 
-	log.Printf("Пользователь %d начал запись в дневник: %s, неделя %d, тип %s, гендер %s", 
+	log.Printf("Пользователь %d начал запись в дневник: %s, неделя %d, тип %s, гендер %s",
 		userID, typeName, week, entryType, gender)
 
 	b.sendMessage(callbackQuery.Message.Chat.ID, response)
@@ -1749,8 +1749,8 @@ func (b *Bot) handleDiaryViewGenderCallback(callbackQuery *tgbotapi.CallbackQuer
 		if gender == "female" {
 			genderName = "девушки"
 		}
-		response := fmt.Sprintf("👀 **Записи %s**\n\n" +
-			"⚠️ В данный момент нет доступных недель для просмотра записей.\n" +
+		response := fmt.Sprintf("👀 Записи %s\n\n"+
+			"⚠️ В данный момент нет доступных недель для просмотра записей.\n"+
 			"Администраторы еще не открыли доступ к неделям.", genderName)
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
@@ -1763,7 +1763,7 @@ func (b *Bot) handleDiaryViewGenderCallback(callbackQuery *tgbotapi.CallbackQuer
 		genderEmoji = "👩"
 	}
 
-	response := fmt.Sprintf("%s **Записи %s**\n\n" +
+	response := fmt.Sprintf("%s Записи %s\n\n"+
 		"Выберите неделю для просмотра записей:", genderEmoji, genderName)
 
 	// Создаем кнопки только для активных недель
@@ -1808,9 +1808,9 @@ func (b *Bot) handleDiaryViewWeekGenderCallback(callbackQuery *tgbotapi.Callback
 	// Читаем из всех типов дневников с гендером
 	typeDirs := []string{"diary_questions", "diary_jointquestions", "diary_thoughts"}
 	typeNames := map[string]string{
-		"diary_questions":     "💪 Ответы на упражнения",
+		"diary_questions":      "💪 Ответы на упражнения",
 		"diary_jointquestions": "👫 Совместные вопросы",
-		"diary_thoughts":      "💭 Личные мысли",
+		"diary_thoughts":       "💭 Личные мысли",
 	}
 
 	for _, typeDir := range typeDirs {
@@ -1834,8 +1834,8 @@ func (b *Bot) handleDiaryViewWeekGenderCallback(callbackQuery *tgbotapi.Callback
 	}
 
 	if len(allEntries) == 0 {
-		response := fmt.Sprintf("%s **Записи %s за %d неделю**\n\n" +
-			"📝 Пока нет записей за эту неделю.\n" +
+		response := fmt.Sprintf("%s Записи %s за %d неделю\n\n"+
+			"📝 Пока нет записей за эту неделю.\n"+
 			"Начните писать дневник, чтобы увидеть здесь записи!", genderEmoji, genderName, week)
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
@@ -1848,7 +1848,7 @@ func (b *Bot) handleDiaryViewWeekGenderCallback(callbackQuery *tgbotapi.Callback
 	}
 
 	// Формируем ответ
-	response := fmt.Sprintf("%s **Записи %s за %d неделю**\n\n", genderEmoji, genderName, week)
+	response := fmt.Sprintf("%s Записи %s за %d неделю\n\n", genderEmoji, genderName, week)
 
 	for entryType, entries := range entriesByType {
 		typeName := typeNames["diary_"+entryType]
@@ -1865,7 +1865,7 @@ func (b *Bot) handleDiaryViewWeekGenderCallback(callbackQuery *tgbotapi.Callback
 			}
 		}
 
-		response += fmt.Sprintf("**%s:**\n", typeName)
+		response += fmt.Sprintf("%s:\n", typeName)
 		for i, entry := range entries {
 			// Обрезаем длинные записи для краткого просмотра
 			entryText := entry.Entry
@@ -1885,17 +1885,17 @@ func (b *Bot) handleDiaryViewWeekGenderCallback(callbackQuery *tgbotapi.Callback
 // getDiaryEntriesByTypeWeekAndGender получает записи дневника конкретного типа, недели и гендера
 func (b *Bot) getDiaryEntriesByTypeWeekAndGender(userID int64, typeDir string, week int, gender string) ([]history.DiaryEntry, error) {
 	filename := filepath.Join("diary_entries", typeDir, gender, fmt.Sprintf("user_%d.json", userID))
-	
+
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return []history.DiaryEntry{}, nil // Возвращаем пустой массив если файла нет
 	}
-	
+
 	var entries []history.DiaryEntry
 	if err := json.Unmarshal(data, &entries); err != nil {
 		return nil, err
 	}
-	
+
 	// Фильтруем по неделе
 	var weekEntries []history.DiaryEntry
 	for _, entry := range entries {
@@ -1903,13 +1903,13 @@ func (b *Bot) getDiaryEntriesByTypeWeekAndGender(userID int64, typeDir string, w
 			weekEntries = append(weekEntries, entry)
 		}
 	}
-	
+
 	return weekEntries, nil
 }
 
 // handleInsightGenderChoice показывает выбор гендера для генерации инсайта
 func (b *Bot) handleInsightGenderChoice(callbackQuery *tgbotapi.CallbackQuery, week int) {
-	response := fmt.Sprintf("🔍 **Персональный инсайт (%d неделя)**\n\n" +
+	response := fmt.Sprintf("🔍 Персональный инсайт (%d неделя)\n\n"+
 		"Для кого вы хотите получить персональный инсайт?", week)
 
 	// Создаем кнопки выбора гендера
@@ -1945,9 +1945,9 @@ func (b *Bot) generatePersonalInsightWithGender(callbackQuery *tgbotapi.Callback
 			genderName = "девушки"
 		}
 		// Если нет записей в дневнике для этой недели, показываем сообщение
-		response := fmt.Sprintf("🔍 **Персональный инсайт для %s (%d неделя)**\n\n" +
-			"Для создания персонального инсайта для %s в %d неделе мне нужны записи в дневнике. " +
-			"Сначала сделайте записи в дневнике для этой недели, а затем вернитесь к инсайту.\n\n" +
+		response := fmt.Sprintf("🔍 Персональный инсайт для %s (%d неделя)\n\n"+
+			"Для создания персонального инсайта для %s в %d неделе мне нужны записи в дневнике. "+
+			"Сначала сделайте записи в дневнике для этой недели, а затем вернитесь к инсайту.\n\n"+
 			"📝 Используйте кнопку \"Мини дневник\" для записи мыслей", genderName, genderName, week)
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 		return
@@ -2015,7 +2015,7 @@ func (b *Bot) generatePersonalInsightWithGender(callbackQuery *tgbotapi.Callback
 	}
 
 	// Формируем финальный ответ
-	response := fmt.Sprintf("🔍 **Персональный инсайт для %s (%d неделя)**\n\n%s", genderName, week, strings.TrimSpace(insightResponse))
+	response := fmt.Sprintf("🔍 Персональный инсайт для %s (%d неделя)\n\n%s", genderName, week, strings.TrimSpace(insightResponse))
 
 	// Сохраняем в историю
 	err = b.history.SaveMessage(userID, username, fmt.Sprintf("Запрос персонального инсайта для %s", genderName), insightResponse, "gpt-4o-mini")
@@ -2030,19 +2030,19 @@ func (b *Bot) generatePersonalInsightWithGender(callbackQuery *tgbotapi.Callback
 // getDiaryEntriesByWeekAndGender получает записи дневника для недели с учетом гендера
 func (b *Bot) getDiaryEntriesByWeekAndGender(userID int64, week int, gender string) ([]history.DiaryEntry, error) {
 	var allWeekEntries []history.DiaryEntry
-	
+
 	// Читаем записи из папки "diary_questions" с гендером
 	questionsEntries, err := b.getDiaryEntriesByTypeWeekAndGender(userID, "diary_questions", week, gender)
 	if err == nil {
 		allWeekEntries = append(allWeekEntries, questionsEntries...)
 	}
-	
+
 	// Читаем записи из папки "diary_thoughts" с гендером
 	thoughtsEntries, err := b.getDiaryEntriesByTypeWeekAndGender(userID, "diary_thoughts", week, gender)
 	if err == nil {
 		allWeekEntries = append(allWeekEntries, thoughtsEntries...)
 	}
-	
+
 	// Для совместимости со старыми записями - читаем из старых файлов
 	oldEntries, err := b.history.GetDiaryEntriesByWeek(userID, week)
 	if err == nil {
@@ -2052,6 +2052,6 @@ func (b *Bot) getDiaryEntriesByWeekAndGender(userID int64, week int, gender stri
 			}
 		}
 	}
-	
+
 	return allWeekEntries, nil
 }
