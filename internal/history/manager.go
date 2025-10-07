@@ -25,6 +25,8 @@ type DiaryEntry struct {
 	UserID    int64     `json:"user_id"`
 	Username  string    `json:"username"`
 	Entry     string    `json:"entry"`
+	Week      int       `json:"week"`               // номер недели (1-4)
+	Type      string    `json:"type"`               // тип записи: questions, joint, personal
 	Mood      string    `json:"mood,omitempty"`     // настроение (опционально)
 	Tags      []string  `json:"tags,omitempty"`     // теги (опционально)
 }
@@ -158,12 +160,14 @@ func (m *Manager) ClearUserHistory(userID int64) error {
 }
 
 // SaveDiaryEntry сохраняет запись в дневник
-func (m *Manager) SaveDiaryEntry(userID int64, username, entry string) error {
+func (m *Manager) SaveDiaryEntry(userID int64, username, entry string, week int, entryType string) error {
 	diaryEntry := DiaryEntry{
 		Timestamp: time.Now(),
 		UserID:    userID,
 		Username:  username,
 		Entry:     entry,
+		Week:      week,
+		Type:      entryType,
 	}
 
 	// Создаем файл дневника для каждого пользователя

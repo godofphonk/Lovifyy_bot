@@ -67,7 +67,7 @@ func (b *Bot) getUserState(userID int64) string {
 	defer b.stateMutex.RUnlock()
 	state, exists := b.userStates[userID]
 	if !exists {
-		return "chat" // по умолчанию режим обычной беседы
+		return "" // возвращаем пустое состояние, если не установлено
 	}
 	return state
 }
@@ -321,6 +321,31 @@ func (b *Bot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 				}
 			}
 		}
+		
+		// Проверяем, не является ли это callback для дневника
+		if strings.HasPrefix(data, "diary_week_") {
+			parts := strings.Split(data, "_")
+			if len(parts) >= 3 {
+				week, err := strconv.Atoi(parts[2])
+				if err == nil && week >= 1 && week <= 4 {
+					b.handleDiaryWeekCallback(callbackQuery, week)
+					return
+				}
+			}
+		}
+		
+		// Проверяем, не является ли это callback для типа записи дневника
+		if strings.HasPrefix(data, "diary_") && strings.Contains(data, "_type_") {
+			parts := strings.Split(data, "_")
+			if len(parts) >= 4 {
+				week, err := strconv.Atoi(parts[1])
+				if err == nil && week >= 1 && week <= 4 {
+					entryType := strings.Join(parts[3:], "_")
+					b.handleDiaryTypeCallback(callbackQuery, week, entryType)
+					return
+				}
+			}
+		}
 		// Если callback не найден, создаем фейковое сообщение
 		fakeMessage := &tgbotapi.Message{
 			MessageID: callbackQuery.Message.MessageID,
@@ -485,13 +510,103 @@ func (b *Bot) handleWeekActionCallback(callbackQuery *tgbotapi.CallbackQuery, we
 
 // handleDiaryCallback обрабатывает нажатие кнопки "Мини дневник"
 func (b *Bot) handleDiaryCallback(callbackQuery *tgbotapi.CallbackQuery) {
-	userID := callbackQuery.From.ID
-	b.setUserState(userID, "diary")
+	response := "📝 **Мини дневник**\n\n" +
+		"Выберите неделю для записи в дневник:"
 	
-	response := "📝 Режим мини дневника активирован!\n\n" +
-		"Теперь просто напишите свои мысли, заметки или события дня. " +
-		"Я буду подтверждать, что ваши записи сохранены.\n\n" +
-		"Это ваше личное пространство для записей и размышлений."
+	// Создаем клавиатуру с выбором недель для дневника
+	diaryKeyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("1️⃣ Неделя", "diary_week_1"),
+			tgbotapi.NewInlineKeyboardButtonData("2️⃣ Неделя", "diary_week_2"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("3️⃣ Неделя", "diary_week_3"),
+			tgbotapi.NewInlineKeyboardButtonData("4️⃣ Неделя", "diary_week_4"),
+		),
+	)
+	
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = diaryKeyboard
+	b.telegram.Send(msg)
+}
+
+// handleDiaryWeekCallback обрабатывает выбор недели для дневника
+func (b *Bot) handleDiaryWeekCallback(callbackQuery *tgbotapi.CallbackQuery, week int) {
+	response := fmt.Sprintf("📝 **Дневник - %d неделя**\n\n" +
+		"Выберите тип записи:", week)
+	
+	// Создаем кнопки для типов записей
+	typeKeyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❓ Ответы на вопросы", fmt.Sprintf("diary_%d_type_questions", week)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("👫 Ответы на совместные вопросы", fmt.Sprintf("diary_%d_type_joint", week)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💭 Личные записи и мысли", fmt.Sprintf("diary_%d_type_personal", week)),
+		),
+	)
+	
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = typeKeyboard
+	b.telegram.Send(msg)
+}
+
+// handleDiaryTypeCallback обрабатывает выбор типа записи дневника
+func (b *Bot) handleDiaryTypeCallback(callbackQuery *tgbotapi.CallbackQuery, week int, entryType string) {
+	userID := callbackQuery.From.ID
+	
+	// Устанавливаем состояние пользователя для дневника
+	b.setUserState(userID, fmt.Sprintf("diary_%d_%s", week, entryType))
+	
+	var response string
+	var typeName string
+	
+	switch entryType {
+	case "questions":
+		typeName = "Ответы на вопросы"
+		// Получаем вопросы для этой недели
+		exercise, err := b.exercises.GetWeekExercise(week)
+		if err == nil && exercise != nil && exercise.Questions != "" {
+			response = fmt.Sprintf("❓ **%s (%d неделя)**\n\n" +
+				"**Напоминание вопросов:**\n%s\n\n" +
+				"Теперь напишите свои ответы на эти вопросы:", typeName, week, exercise.Questions)
+		} else {
+			response = fmt.Sprintf("❓ **%s (%d неделя)**\n\n" +
+				"Напишите свои ответы на вопросы недели:", typeName, week)
+		}
+		
+	case "joint":
+		typeName = "Ответы на совместные вопросы"
+		// Получаем совместные вопросы для этой недели
+		exercise, err := b.exercises.GetWeekExercise(week)
+		if err == nil && exercise != nil && exercise.JointQuestions != "" {
+			response = fmt.Sprintf("👫 **%s (%d неделя)**\n\n" +
+				"**Напоминание совместных вопросов:**\n%s\n\n" +
+				"Теперь напишите ваши совместные ответы и обсуждения:", typeName, week, exercise.JointQuestions)
+		} else {
+			response = fmt.Sprintf("👫 **%s (%d неделя)**\n\n" +
+				"Напишите ваши ответы на совместные вопросы:", typeName, week)
+		}
+		
+	case "personal":
+		typeName = "Личные записи и мысли"
+		// Получаем инструкции для дневника
+		exercise, err := b.exercises.GetWeekExercise(week)
+		if err == nil && exercise != nil && exercise.DiaryInstructions != "" {
+			response = fmt.Sprintf("💭 **%s (%d неделя)**\n\n" +
+				"**Рекомендации для записей:**\n%s\n\n" +
+				"Напишите свои личные мысли и размышления:", typeName, week, exercise.DiaryInstructions)
+		} else {
+			response = fmt.Sprintf("💭 **%s (%d неделя)**\n\n" +
+				"Напишите свои личные мысли и размышления:", typeName, week)
+		}
+		
+	default:
+		response = "❌ Неизвестный тип записи"
+	}
+	
 	b.sendMessage(callbackQuery.Message.Chat.ID, response)
 }
 
@@ -756,12 +871,24 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		b.telegram.Send(msg)
 		
 	case "diary":
-		b.setUserState(userID, "diary")
-		response := "📝 Режим мини дневника активирован!\n\n" +
-			"Теперь просто напишите свои мысли, заметки или события дня. " +
-			"Я буду подтверждать, что ваши записи сохранены.\n\n" +
-			"Это ваше личное пространство для записей и размышлений."
-		b.sendMessage(message.Chat.ID, response)
+		response := "📝 **Мини дневник**\n\n" +
+			"Выберите неделю для записи в дневник:"
+		
+		// Создаем клавиатуру с выбором недель для дневника
+		diaryKeyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("1️⃣ Неделя", "diary_week_1"),
+				tgbotapi.NewInlineKeyboardButtonData("2️⃣ Неделя", "diary_week_2"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("3️⃣ Неделя", "diary_week_3"),
+				tgbotapi.NewInlineKeyboardButtonData("4️⃣ Неделя", "diary_week_4"),
+			),
+		)
+		
+		msg := tgbotapi.NewMessage(message.Chat.ID, response)
+		msg.ReplyMarkup = diaryKeyboard
+		b.telegram.Send(msg)
 		
 	case "setprompt":
 		if !b.isAdmin(userID) {
@@ -937,18 +1064,72 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 	userState := b.getUserState(userID)
 	
 	// Если пользователь в режиме дневника, сохраняем в отдельный файл дневника
-	if userState == "diary" {
-		// Сохраняем запись в дневник (отдельный JSON файл)
-		err := b.history.SaveDiaryEntry(userID, username, message.Text)
-		if err != nil {
-			log.Printf("Ошибка сохранения записи дневника: %v", err)
-			b.sendMessage(message.Chat.ID, "❌ Ошибка сохранения записи в дневник")
-			return
+	if strings.HasPrefix(userState, "diary_") {
+		// Парсим состояние: diary_<week>_<type>
+		parts := strings.Split(userState, "_")
+		if len(parts) >= 3 {
+			week, err := strconv.Atoi(parts[1])
+			if err == nil && week >= 1 && week <= 4 {
+				entryType := strings.Join(parts[2:], "_")
+				
+				// Сохраняем запись в дневник с указанием недели и типа
+				err := b.history.SaveDiaryEntry(userID, username, message.Text, week, entryType)
+				if err != nil {
+					log.Printf("Ошибка сохранения записи дневника: %v", err)
+					b.sendMessage(message.Chat.ID, "❌ Ошибка сохранения записи в дневник")
+					return
+				}
+				
+				// Определяем тип записи для ответа
+				var typeEmoji, typeName string
+				switch entryType {
+				case "questions":
+					typeEmoji = "❓"
+					typeName = "ответы на вопросы"
+				case "joint":
+					typeEmoji = "👫"
+					typeName = "ответы на совместные вопросы"
+				case "personal":
+					typeEmoji = "💭"
+					typeName = "личные записи"
+				default:
+					typeEmoji = "📝"
+					typeName = "запись"
+				}
+				
+				// Отправляем подтверждение
+				diaryResponse := fmt.Sprintf("%s Запись сохранена в дневник (%d неделя - %s)\n\n" +
+					"Можете продолжить писать записи этого типа или выберите другое действие через главное меню.", typeEmoji, week, typeName)
+				b.sendMessage(message.Chat.ID, diaryResponse)
+				
+				// НЕ сбрасываем состояние - пользователь остается в режиме дневника
+				return
+			}
 		}
 		
-		// Отправляем подтверждение с эмодзи и временем
-		diaryResponse := "📝 Запись сохранена в дневник"
-		b.sendMessage(message.Chat.ID, diaryResponse)
+		// Если не удалось распарсить состояние, сбрасываем его
+		b.setUserState(userID, "chat")
+	}
+
+	// Если состояние пустое (пользователь еще не выбрал режим), показываем главное меню
+	if userState == "" {
+		response := "Привет! 👋 Выберите режим работы:"
+		
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("💬 Обычная беседа", "chat"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🗓️ Упражнения недели", "advice"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("📝 Мини дневник", "diary"),
+			),
+		)
+		
+		msg := tgbotapi.NewMessage(message.Chat.ID, response)
+		msg.ReplyMarkup = keyboard
+		b.telegram.Send(msg)
 		return
 	}
 
