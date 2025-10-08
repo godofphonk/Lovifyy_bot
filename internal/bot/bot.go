@@ -78,15 +78,16 @@ func (b *Bot) getUserState(userID int64) string {
 
 // Bot представляет Telegram бота с ИИ
 type Bot struct {
-	telegram     *tgbotapi.BotAPI
-	ai           *ai.OpenAIClient
-	history      *history.Manager
-	exercises    *exercises.Manager
-	rateLimiter  *RateLimiter
-	systemPrompt string
-	adminIDs     []int64
-	userStates   map[int64]string // состояния пользователей (chat, diary)
-	stateMutex   sync.RWMutex     // мьютекс для безопасного доступа к состояниям
+	telegram        *tgbotapi.BotAPI
+	ai              *ai.OpenAIClient
+	history         *history.Manager
+	exercises       *exercises.Manager
+	rateLimiter     *RateLimiter
+	systemPrompt    string
+	welcomeMessage  string
+	adminIDs        []int64
+	userStates      map[int64]string // состояния пользователей (chat, diary)
+	stateMutex      sync.RWMutex     // мьютекс для безопасного доступа к состояниям
 }
 
 // NewBot создает новый экземпляр бота
@@ -138,15 +139,23 @@ func NewBot(telegramToken, systemPrompt string, adminIDs []int64) *Bot {
 	exercisesManager := exercises.NewManager()
 	log.Println("✅ Менеджер упражнений инициализирован!")
 
+	// Дефолтное приветственное сообщение
+	defaultWelcome := "Привет! 👋 Я Lovifyy Bot - ваш персональный помощник!\n\n" +
+		"🤖 Работаю полностью локально с ИИ\n" +
+		"💾 Запоминаю всю нашу беседу\n" +
+		"🗓️ Готов подготовить упражнения на неделю на основе нашего общения\n\n" +
+		"Выберите режим работы:"
+
 	return &Bot{
-		telegram:     bot,
-		ai:           aiClient,
-		history:      historyManager,
-		exercises:    exercisesManager,
-		rateLimiter:  NewRateLimiter(),
-		systemPrompt: systemPrompt,
-		adminIDs:     adminIDs,
-		userStates:   make(map[int64]string),
+		telegram:       bot,
+		ai:             aiClient,
+		history:        historyManager,
+		exercises:      exercisesManager,
+		rateLimiter:    NewRateLimiter(),
+		systemPrompt:   systemPrompt,
+		welcomeMessage: defaultWelcome,
+		adminIDs:       adminIDs,
+		userStates:     make(map[int64]string),
 	}
 }
 
@@ -297,6 +306,10 @@ func (b *Bot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 		b.handlePromptCallback(callbackQuery)
 	case "setprompt_menu":
 		b.handleSetPromptMenuCallback(callbackQuery)
+	case "welcome":
+		b.handleWelcomeCallback(callbackQuery)
+	case "setwelcome_menu":
+		b.handleSetWelcomeMenuCallback(callbackQuery)
 	case "exercises_menu":
 		b.handleExercisesMenuCallback(callbackQuery)
 	case "exercise_week_1":
@@ -782,6 +795,41 @@ func (b *Bot) handleSetPromptMenuCallback(callbackQuery *tgbotapi.CallbackQuery)
 	b.sendMessage(callbackQuery.Message.Chat.ID, response)
 }
 
+// handleWelcomeCallback обрабатывает нажатие кнопки "Посмотреть приветствие"
+func (b *Bot) handleWelcomeCallback(callbackQuery *tgbotapi.CallbackQuery) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта команда доступна только администраторам.")
+		return
+	}
+
+	response := fmt.Sprintf("👋 Текущее приветственное сообщение:\n\n%s\n\n💡 Для изменения используйте:\n/setwelcome <новое приветствие>", b.welcomeMessage)
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
+// handleSetWelcomeMenuCallback обрабатывает нажатие кнопки "Изменить приветствие"
+func (b *Bot) handleSetWelcomeMenuCallback(callbackQuery *tgbotapi.CallbackQuery) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта команда доступна только администраторам.")
+		return
+	}
+
+	response := "📝 Изменение приветственного сообщения\n\n" +
+		"Отправьте команду в формате:\n" +
+		"`/setwelcome <новое приветствие>`\n\n" +
+		"💡 Готовые варианты:\n\n" +
+		"Стандартное:\n" +
+		"`/setwelcome Привет! 👋 Я Lovifyy Bot - ваш персональный помощник!`\n\n" +
+		"Для пар:\n" +
+		"`/setwelcome Добро пожаловать в Lovifyy Bot! 💕 Я помогу укрепить ваши отношения через упражнения и дневник.`\n\n" +
+		"Краткое:\n" +
+		"`/setwelcome Привет! Выберите режим работы:`"
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
 // handleExercisesMenuCallback обрабатывает нажатие кнопки "Настроить упражнения"
 func (b *Bot) handleExercisesMenuCallback(callbackQuery *tgbotapi.CallbackQuery) {
 	userID := callbackQuery.From.ID
@@ -919,11 +967,7 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 
 	switch message.Command() {
 	case "start":
-		response := "Привет! 👋 Я Lovifyy Bot - ваш персональный помощник!\n\n" +
-			"🤖 Работаю полностью локально с ИИ\n" +
-			"💾 Запоминаю всю нашу беседу\n" +
-			"🗓️ Готов подготовить упражнения на неделю на основе нашего общения\n\n" +
-			"Выберите режим работы:"
+		response := b.welcomeMessage
 
 		// Создаем простую inline клавиатуру с тремя основными функциями
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -1044,6 +1088,26 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		b.sendMessage(message.Chat.ID, response)
 		log.Printf("👑 Администратор %d изменил системный промпт", userID)
 
+	case "setwelcome":
+		if !b.isAdmin(userID) {
+			b.sendMessage(message.Chat.ID, "❌ Эта команда доступна только администраторам.")
+			return
+		}
+
+		// Получаем новое приветствие из текста сообщения
+		args := strings.SplitN(message.Text, " ", 2)
+		if len(args) < 2 || strings.TrimSpace(args[1]) == "" {
+			b.sendMessage(message.Chat.ID, "❌ Использование: /setwelcome <новое приветствие>\n\nПример:\n/setwelcome Привет! 👋 Я Lovifyy Bot - ваш персональный помощник!")
+			return
+		}
+
+		newWelcome := strings.TrimSpace(args[1])
+		b.welcomeMessage = newWelcome
+
+		response := fmt.Sprintf("✅ Приветственное сообщение успешно изменено!\n\n👋 Новое приветствие:\n%s", newWelcome)
+		b.sendMessage(message.Chat.ID, response)
+		log.Printf("👑 Администратор %d изменил приветственное сообщение", userID)
+
 	case "setweek":
 		if !b.isAdmin(userID) {
 			b.sendMessage(message.Chat.ID, "❌ Эта команда доступна только администраторам.")
@@ -1114,6 +1178,8 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			"🔧 Доступные команды:\n" +
 			"/setprompt <текст> - изменить системный промпт\n" +
 			"/prompt - посмотреть текущий промпт\n" +
+			"/setwelcome <текст> - изменить приветственное сообщение\n" +
+			"/welcome - посмотреть текущее приветствие\n" +
 			"/setweek <неделя> <поле> <значение> - настроить элементы недели\n" +
 			"/adminhelp - эта справка\n\n" +
 			"💡 Поля для настройки недель:\n" +
@@ -1138,6 +1204,12 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			),
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData("✏️ Изменить промпт", "setprompt_menu"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("👋 Посмотреть приветствие", "welcome"),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("📝 Изменить приветствие", "setwelcome_menu"),
 			),
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData("🗓️ Настроить упражнения", "exercises_menu"),
@@ -1173,6 +1245,33 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			"`/setprompt Ты дружелюбный помощник, готовый ответить на любые вопросы. Будь позитивным и полезным.`\n\n" +
 			"Программист:\n" +
 			"`/setprompt Ты программист-эксперт, специализирующийся на Go и веб-разработке. Помогай с кодом и объясняй концепции.`"
+		b.sendMessage(message.Chat.ID, response)
+
+	case "welcome":
+		if !b.isAdmin(userID) {
+			b.sendMessage(message.Chat.ID, "❌ Эта команда доступна только администраторам.")
+			return
+		}
+
+		response := fmt.Sprintf("👋 Текущее приветственное сообщение:\n\n%s\n\n💡 Для изменения используйте:\n/setwelcome <новое приветствие>", b.welcomeMessage)
+		b.sendMessage(message.Chat.ID, response)
+
+	case "setwelcome_menu":
+		if !b.isAdmin(userID) {
+			b.sendMessage(message.Chat.ID, "❌ Эта команда доступна только администраторам.")
+			return
+		}
+
+		response := "📝 Изменение приветственного сообщения\n\n" +
+			"Отправьте команду в формате:\n" +
+			"`/setwelcome <новое приветствие>`\n\n" +
+			"💡 Готовые варианты:\n\n" +
+			"Стандартное:\n" +
+			"`/setwelcome Привет! 👋 Я Lovifyy Bot - ваш персональный помощник!`\n\n" +
+			"Для пар:\n" +
+			"`/setwelcome Добро пожаловать в Lovifyy Bot! 💕 Я помогу укрепить ваши отношения через упражнения и дневник.`\n\n" +
+			"Краткое:\n" +
+			"`/setwelcome Привет! Выберите режим работы:`"
 		b.sendMessage(message.Chat.ID, response)
 
 	case "clear":
@@ -1884,27 +1983,40 @@ func (b *Bot) handleDiaryViewWeekGenderCallback(callbackQuery *tgbotapi.Callback
 
 // getDiaryEntriesByTypeWeekAndGender получает записи дневника конкретного типа, недели и гендера
 func (b *Bot) getDiaryEntriesByTypeWeekAndGender(userID int64, typeDir string, week int, gender string) ([]history.DiaryEntry, error) {
-	filename := filepath.Join("diary_entries", typeDir, gender, fmt.Sprintf("user_%d.json", userID))
+	// Новая структура: diary_entries/typeDir/week/gender/user_ID.json
+	filename := filepath.Join("diary_entries", typeDir, fmt.Sprintf("%d", week), gender, fmt.Sprintf("user_%d.json", userID))
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return []history.DiaryEntry{}, nil // Возвращаем пустой массив если файла нет
+		// Пробуем старую структуру для совместимости: diary_entries/typeDir/gender/user_ID.json
+		oldFilename := filepath.Join("diary_entries", typeDir, gender, fmt.Sprintf("user_%d.json", userID))
+		data, err = os.ReadFile(oldFilename)
+		if err != nil {
+			return []history.DiaryEntry{}, nil // Возвращаем пустой массив если файла нет
+		}
+		
+		// Если читаем из старого файла, фильтруем по неделе
+		var entries []history.DiaryEntry
+		if err := json.Unmarshal(data, &entries); err != nil {
+			return nil, err
+		}
+
+		var weekEntries []history.DiaryEntry
+		for _, entry := range entries {
+			if entry.Week == week {
+				weekEntries = append(weekEntries, entry)
+			}
+		}
+		return weekEntries, nil
 	}
 
+	// Читаем из новой структуры - все записи уже для нужной недели
 	var entries []history.DiaryEntry
 	if err := json.Unmarshal(data, &entries); err != nil {
 		return nil, err
 	}
 
-	// Фильтруем по неделе
-	var weekEntries []history.DiaryEntry
-	for _, entry := range entries {
-		if entry.Week == week {
-			weekEntries = append(weekEntries, entry)
-		}
-	}
-
-	return weekEntries, nil
+	return entries, nil
 }
 
 // handleInsightGenderChoice показывает выбор гендера для генерации инсайта

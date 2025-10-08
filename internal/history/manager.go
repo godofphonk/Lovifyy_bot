@@ -292,17 +292,17 @@ func (m *Manager) SaveDiaryEntryWithGender(userID int64, username, entry string,
 		Type:      entryType,
 	}
 
-	// Определяем папку и файл в зависимости от типа записи и гендера
+	// Определяем папку и файл в зависимости от типа записи, гендера и недели
 	var typeDir, filename string
 	switch entryType {
 	case "questions":
-		typeDir = filepath.Join(m.diaryDir, "diary_questions", gender)
+		typeDir = filepath.Join(m.diaryDir, "diary_questions", fmt.Sprintf("%d", week), gender)
 		filename = filepath.Join(typeDir, fmt.Sprintf("user_%d.json", userID))
 	case "joint":
-		typeDir = filepath.Join(m.diaryDir, "diary_jointquestions", gender)
+		typeDir = filepath.Join(m.diaryDir, "diary_jointquestions", fmt.Sprintf("%d", week), gender)
 		filename = filepath.Join(typeDir, fmt.Sprintf("user_%d.json", userID))
 	case "personal":
-		typeDir = filepath.Join(m.diaryDir, "diary_thoughts", gender)
+		typeDir = filepath.Join(m.diaryDir, "diary_thoughts", fmt.Sprintf("%d", week), gender)
 		filename = filepath.Join(typeDir, fmt.Sprintf("user_%d.json", userID))
 	default:
 		// Для совместимости со старыми записями
