@@ -107,9 +107,9 @@ func NewBot(telegramToken, systemPrompt string, adminIDs []int64) *Bot {
 	// Устанавливаем команды для меню
 	commands := []tgbotapi.BotCommand{
 		{Command: "start", Description: "🚀 Начать работу с ботом"},
-		{Command: "chat", Description: "💬 Обычная беседа"},
-		{Command: "advice", Description: "🗓️ Упражнения недели"},
-		{Command: "diary", Description: "📝 Мини дневник"},
+		{Command: "chat", Description: "💒 Задать вопрос о отношениях"},
+		{Command: "advice", Description: "👩🏼‍❤️‍👨🏻 Упражнение недели"},
+		{Command: "diary", Description: "💌 Мини-дневник"},
 		{Command: "clear", Description: "🗑️ Очистить историю"},
 		{Command: "help", Description: "❓ Справка"},
 		{Command: "adminhelp", Description: "👑 Админ-панель"},
@@ -312,6 +312,14 @@ func (b *Bot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 		b.handleSetWelcomeMenuCallback(callbackQuery)
 	case "exercises_menu":
 		b.handleExercisesMenuCallback(callbackQuery)
+	case "notifications_menu":
+		b.handleNotificationsMenuCallback(callbackQuery)
+	case "schedule_notification":
+		b.handleScheduleNotificationCallback(callbackQuery)
+	case "view_notifications":
+		b.handleViewNotificationsCallback(callbackQuery)
+	case "send_now":
+		b.handleSendNowCallback(callbackQuery)
 	case "exercise_week_1":
 		b.handleExerciseWeekCallback(callbackQuery, 1)
 	case "exercise_week_2":
@@ -859,6 +867,96 @@ func (b *Bot) handleExercisesMenuCallback(callbackQuery *tgbotapi.CallbackQuery)
 	b.telegram.Send(msg)
 }
 
+// handleNotificationsMenuCallback обрабатывает нажатие кнопки "Уведомления"
+func (b *Bot) handleNotificationsMenuCallback(callbackQuery *tgbotapi.CallbackQuery) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+
+	response := "📢 Управление уведомлениями\n\n" +
+		"🕐 Часовой пояс: UTC+5 (Алматы/Ташкент)\n" +
+		"📅 Формат времени: ДД.ММ.ГГГГ ЧЧ:ММ\n\n" +
+		"Выберите действие:"
+
+	// Создаем клавиатуру с опциями уведомлений
+	notificationsKeyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("⏰ Запланировать уведомление", "schedule_notification"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📋 Посмотреть запланированные", "view_notifications"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📤 Отправить сейчас", "send_now"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = notificationsKeyboard
+	b.telegram.Send(msg)
+}
+
+// handleScheduleNotificationCallback обрабатывает запланированные уведомления
+func (b *Bot) handleScheduleNotificationCallback(callbackQuery *tgbotapi.CallbackQuery) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+
+	response := "⏰ Запланировать уведомление\n\n" +
+		"Отправьте команду в формате:\n" +
+		"`/schedule ДД.ММ.ГГГГ ЧЧ:ММ Текст уведомления`\n\n" +
+		"🕐 Часовой пояс: UTC+5 (Алматы/Ташкент)\n\n" +
+		"Примеры:\n" +
+		"`/schedule 15.10.2025 12:00 Напоминание о упражнениях!`\n" +
+		"`/schedule 20.10.2025 18:30 Время для дневника 💕`\n\n" +
+		"⚠️ Уведомление будет отправлено всем пользователям бота"
+
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
+// handleViewNotificationsCallback показывает запланированные уведомления
+func (b *Bot) handleViewNotificationsCallback(callbackQuery *tgbotapi.CallbackQuery) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+
+	// TODO: Здесь будет логика чтения запланированных уведомлений из файла
+	response := "📋 Запланированные уведомления\n\n" +
+		"🔄 Функция в разработке...\n\n" +
+		"Скоро здесь будет список всех запланированных уведомлений с возможностью их отмены."
+
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
+// handleSendNowCallback обрабатывает отправку уведомления сейчас
+func (b *Bot) handleSendNowCallback(callbackQuery *tgbotapi.CallbackQuery) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+
+	response := "📤 Отправить уведомление сейчас\n\n" +
+		"Отправьте команду в формате:\n" +
+		"`/broadcast Текст уведомления`\n\n" +
+		"Примеры:\n" +
+		"`/broadcast Привет! Не забудьте заполнить дневник сегодня 💕`\n" +
+		"`/broadcast Новые упражнения уже доступны! 👩🏼‍❤️‍👨🏻`\n\n" +
+		"⚠️ Сообщение будет немедленно отправлено всем пользователям бота"
+
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
 // handleExerciseWeekCallback обрабатывает выбор недели для настройки
 func (b *Bot) handleExerciseWeekCallback(callbackQuery *tgbotapi.CallbackQuery, week int) {
 	userID := callbackQuery.From.ID
@@ -972,13 +1070,13 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		// Создаем простую inline клавиатуру с тремя основными функциями
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("💬 Обычная беседа", "chat"),
+				tgbotapi.NewInlineKeyboardButtonData("👩🏼‍❤️‍👨🏻 Упражнение недели", "advice"),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🗓️ Упражнения недели", "advice"),
+				tgbotapi.NewInlineKeyboardButtonData("💌 Мини-дневник", "diary"),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("📝 Мини дневник", "diary"),
+				tgbotapi.NewInlineKeyboardButtonData("💒 Задать вопрос о отношениях", "chat"),
 			),
 		)
 
@@ -1214,6 +1312,9 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData("🗓️ Настроить упражнения", "exercises_menu"),
 			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("📢 Уведомления", "notifications_menu"),
+			),
 		)
 
 		msg := tgbotapi.NewMessage(message.Chat.ID, response)
@@ -1374,13 +1475,13 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("💬 Обычная беседа", "chat"),
+				tgbotapi.NewInlineKeyboardButtonData("👩🏼‍❤️‍👨🏻 Упражнение недели", "advice"),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🗓️ Упражнения недели", "advice"),
+				tgbotapi.NewInlineKeyboardButtonData("💌 Мини-дневник", "diary"),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("📝 Мини дневник", "diary"),
+				tgbotapi.NewInlineKeyboardButtonData("💒 Задать вопрос о отношениях", "chat"),
 			),
 		)
 
@@ -1396,13 +1497,13 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("💬 Обычная беседа", "chat"),
+				tgbotapi.NewInlineKeyboardButtonData("👩🏼‍❤️‍👨🏻 Упражнение недели", "advice"),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🗓️ Упражнения недели", "advice"),
+				tgbotapi.NewInlineKeyboardButtonData("💌 Мини-дневник", "diary"),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("📝 Мини дневник", "diary"),
+				tgbotapi.NewInlineKeyboardButtonData("💒 Задать вопрос о отношениях", "chat"),
 			),
 		)
 
