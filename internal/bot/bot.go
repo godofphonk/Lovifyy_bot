@@ -983,11 +983,15 @@ func (b *Bot) handleScheduleNotificationCallback(callbackQuery *tgbotapi.Callbac
 		"🗓️ Выберите дату отправки:\n" +
 		"🕐 Часовой пояс: UTC+5 (Алматы/Ташкент)"
 
-	// Создаем кнопки с датами (сегодня + следующие 6 дней)
+	// Создаем кнопки с датами (сегодня + следующие 6 дней) в UTC+5
 	var buttons [][]tgbotapi.InlineKeyboardButton
 	
+	// Получаем текущее время в UTC+5 (Алматы/Ташкент)
+	location, _ := time.LoadLocation("Asia/Almaty")
+	nowUTC5 := time.Now().In(location)
+	
 	for i := 0; i < 7; i++ {
-		date := time.Now().AddDate(0, 0, i)
+		date := nowUTC5.AddDate(0, 0, i)
 		dateStr := date.Format("02.01.2006")
 		var dayName string
 		
@@ -1141,13 +1145,6 @@ func (b *Bot) handleScheduleTemplateCallback(callbackQuery *tgbotapi.CallbackQue
 		return
 	}
 
-	templates := []string{
-		"Привет! ❤️ Не забудьте заполнить дневник сегодня. Ваши мысли и чувства важны для укрепления отношений!",
-		"Время для упражнений! 💑 Новые задания помогут вам лучше понять друг друга.",
-		"Каждый день - это новая возможность стать ближе! 🌟 Цените моменты вместе.",
-		"", // Для кастомного текста
-	}
-
 	if templateIndex == 3 {
 		// Кастомный текст - просим ввести
 		response := fmt.Sprintf("📝 Введите свой текст уведомления\n\n📅 Дата: %s\n🕐 Время: %s (UTC+5)\n\n" +
@@ -1159,8 +1156,20 @@ func (b *Bot) handleScheduleTemplateCallback(callbackQuery *tgbotapi.CallbackQue
 		return
 	}
 
-	if templateIndex >= 0 && templateIndex < len(templates) {
-		messageText := templates[templateIndex]
+	// Генерируем только нужный шаблон для оптимизации скорости
+	var messageText string
+	switch templateIndex {
+	case 0:
+		messageText = b.generateNotificationTemplate("diary")
+	case 1:
+		messageText = b.generateNotificationTemplate("exercises")
+	case 2:
+		messageText = b.generateNotificationTemplate("motivation")
+	default:
+		messageText = "Привет! ❤️ Напоминание от вашего бота!"
+	}
+
+	if templateIndex >= 0 && templateIndex <= 2 {
 		
 		// Сохраняем уведомление в файл
 		if err := b.saveNotification(dateStr, timeStr, messageText); err != nil {
@@ -1419,13 +1428,6 @@ func (b *Bot) handleSendNowTemplateCallback(callbackQuery *tgbotapi.CallbackQuer
 		return
 	}
 
-	templates := []string{
-		"Привет! ❤️ Не забудьте заполнить дневник сегодня. Ваши мысли и чувства важны для укрепления отношений!",
-		"Время для упражнений! 💑 Новые задания помогут вам лучше понять друг друга.",
-		"Каждый день - это новая возможность стать ближе! 🌟 Цените моменты вместе.",
-		"", // Для кастомного текста
-	}
-
 	if templateIndex == 3 {
 		// Кастомный текст - просим ввести
 		response := "📝 Введите текст для мгновенной отправки\n\n" +
@@ -1437,8 +1439,20 @@ func (b *Bot) handleSendNowTemplateCallback(callbackQuery *tgbotapi.CallbackQuer
 		return
 	}
 
-	if templateIndex >= 0 && templateIndex < len(templates) {
-		messageText := templates[templateIndex]
+	// Генерируем только нужный шаблон для оптимизации скорости
+	var messageText string
+	switch templateIndex {
+	case 0:
+		messageText = b.generateNotificationTemplate("diary")
+	case 1:
+		messageText = b.generateNotificationTemplate("exercises")
+	case 2:
+		messageText = b.generateNotificationTemplate("motivation")
+	default:
+		messageText = "Привет! ❤️ Напоминание от вашего бота!"
+	}
+
+	if templateIndex >= 0 && templateIndex <= 2 {
 		
 		// Отправляем уведомление всем пользователям
 		sentCount, err := b.broadcastMessage(messageText)
@@ -1451,7 +1465,8 @@ func (b *Bot) handleSendNowTemplateCallback(callbackQuery *tgbotapi.CallbackQuer
 		response := fmt.Sprintf("✅ Уведомление отправлено!\n\n💌 Текст:\n%s\n\n" +
 			"📤 Сообщение отправлено %d пользователям", messageText, sentCount)
 		
-		log.Printf("👑 Администратор %d отправил уведомление %d пользователям: %s", userID, sentCount, messageText)
+		log.Printf("👑 Администратор %d отправил мгновенное уведомление %d пользователям", userID, sentCount)
+		log.Printf("📝 Полный текст мгновенного уведомления: %s", messageText)
 		b.sendMessage(callbackQuery.Message.Chat.ID, response)
 	}
 }
@@ -2894,7 +2909,8 @@ func (b *Bot) handleCustomBroadcastInput(message *tgbotapi.Message) {
 	response := fmt.Sprintf("✅ Уведомление отправлено!\n\n💌 Текст:\n%s\n\n" +
 		"📤 Сообщение отправлено %d пользователям", messageText, sentCount)
 	
-	log.Printf("👑 Администратор %d отправил уведомление %d пользователям: %s", userID, sentCount, messageText)
+	log.Printf("👑 Администратор %d отправил кастомное уведомление %d пользователям", userID, sentCount)
+	log.Printf("📝 Полный текст кастомного уведомления: %s", messageText)
 	b.sendMessage(message.Chat.ID, response)
 }
 
@@ -2906,7 +2922,55 @@ func (b *Bot) cleanUTF8(s string) string {
 	
 	// Если строка содержит невалидные UTF-8 символы, очищаем её
 	cleaned := strings.ToValidUTF8(s, "")
+	// Дополнительно убираем пустые символы в конце
+	cleaned = strings.TrimRight(cleaned, "\x00\uFFFD")
 	return cleaned
+}
+
+// generateNotificationTemplate генерирует динамический шаблон уведомления с помощью GPT
+func (b *Bot) generateNotificationTemplate(templateType string) string {
+	var prompt string
+	
+	switch templateType {
+	case "diary":
+		prompt = "Создай короткое мотивирующее сообщение (до 100 символов) о важности ведения дневника отношений. Используй теплый тон и простые эмодзи. Начни с 'Привет!'"
+	case "exercises":
+		prompt = "Создай короткое сообщение (до 100 символов) о пользе психологических упражнений и заданий для укрепления отношений пар. Используй мотивирующий тон и простые эмодзи. Упомяни 'упражнения для отношений' или 'задания для пар'"
+	case "motivation":
+		prompt = "Создай короткую мотивирующую цитату (до 100 символов) об отношениях и любви. Используй вдохновляющий тон и простые эмодзи"
+	default:
+		return "Привет! ❤️ Напоминание от вашего бота о важности отношений!"
+	}
+	
+	// Генерируем ответ через AI
+	log.Printf("🤖 Генерируем шаблон типа '%s' с промптом: %s", templateType, prompt)
+	startTime := time.Now()
+	response, err := b.ai.Generate(prompt)
+	duration := time.Since(startTime)
+	if err != nil {
+		log.Printf("❌ Ошибка генерации шаблона %s: %v", templateType, err)
+		// Возвращаем запасной вариант при ошибке
+		switch templateType {
+		case "diary":
+			return "Привет! ❤️ Время заполнить дневник - ваши мысли важны!"
+		case "exercises":
+			return "Время для упражнений для отношений! 💑 Психологические задания помогут вам стать ближе!"
+		case "motivation":
+			return "Каждый день - шанс стать ближе! 🌟 Цените моменты вместе!"
+		default:
+			return "Привет! ❤️ Напоминание от вашего бота!"
+		}
+	}
+	
+	// Очищаем ответ от лишних символов и проблем с UTF-8
+	cleanResponse := strings.TrimSpace(response)
+	cleanResponse = b.cleanUTF8(cleanResponse)
+	
+	// Логируем полный ответ с временем генерации
+	log.Printf("✅ Сгенерирован шаблон '%s' за %.2f сек (длина %d): %s", templateType, duration.Seconds(), len(cleanResponse), cleanResponse)
+	
+	// Возвращаем полный текст без ограничений
+	return cleanResponse
 }
 
 // broadcastMessage отправляет сообщение всем пользователям бота
