@@ -49,5 +49,9 @@ func main() {
 	log.Println("🚀 Lovifyy Bot запущен...")
 	log.Println("💾 История сохраняется для каждого пользователя")
 	log.Println("🤖 Используется OpenAI модель: GPT-4o-mini")
+	
+	// Запускаем планировщик уведомлений
+	go telegramBot.StartNotificationScheduler()
+	
 	telegramBot.Start()
 }

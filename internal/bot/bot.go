@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"Lovifyy_bot/internal/ai"
 	"Lovifyy_bot/internal/exercises"
@@ -108,7 +109,7 @@ func NewBot(telegramToken, systemPrompt string, adminIDs []int64) *Bot {
 	commands := []tgbotapi.BotCommand{
 		{Command: "start", Description: "🚀 Начать работу с ботом"},
 		{Command: "chat", Description: "💒 Задать вопрос о отношениях"},
-		{Command: "advice", Description: "👩🏼‍❤️‍👨🏻 Упражнение недели"},
+		{Command: "advice", Description: "💑 Упражнение недели"},
 		{Command: "diary", Description: "💌 Мини-дневник"},
 		{Command: "clear", Description: "🗑️ Очистить историю"},
 		{Command: "help", Description: "❓ Справка"},
@@ -140,11 +141,18 @@ func NewBot(telegramToken, systemPrompt string, adminIDs []int64) *Bot {
 	log.Println("✅ Менеджер упражнений инициализирован!")
 
 	// Дефолтное приветственное сообщение
-	defaultWelcome := "Привет! 👋 Я Lovifyy Bot - ваш персональный помощник!\n\n" +
-		"🤖 Работаю полностью локально с ИИ\n" +
-		"💾 Запоминаю всю нашу беседу\n" +
-		"🗓️ Готов подготовить упражнения на неделю на основе нашего общения\n\n" +
-		"Выберите режим работы:"
+	defaultWelcome := "Привет, дорогие! 👋💖 Я так рад видеть вас здесь и вместе отправиться в это маленькое путешествие по вашим отношениям! 🫂\n\n" +
+		"Этот чат создан для того, чтобы каждый день находить моменты радости, тепла и взаимопонимания, замечать друг друга и вместе делать ваши отношения ещё более счастливыми. Здесь есть несколько мест, которые помогут вам в этом:\n\n" +
+		"1️⃣ Упражнение недели 💑\n" +
+		"Каждую неделю я буду предлагать одно задание, которое помогает лучше понимать друг друга, делиться чувствами и развивать приятные привычки общения.\n" +
+		"Важно: всё, что вы делаете в упражнениях, нужно фиксировать в мини-дневнике, чтобы видеть свой прогресс и маленькие успехи. 💗\n\n" +
+		"2️⃣ Мини-дневник 💌\n" +
+		"Это место для ежедневных коротких заметок о ваших наблюдениях, открытиях и шагах в отношениях. Даже одно предложение в день помогает закреплять навыки, видеть рост ваших отношений и отмечать позитивные изменения.\n\n" +
+		"💡 Совет: не переживайте о форме или идеальности записей — главное, чтобы это было честно и от сердца. Мини-дневник помогает закреплять всё, чему вы учитесь в упражнениях недели, и видеть положительные изменения в отношениях.\n\n" +
+		"3️⃣ Задать вопрос о отношениях 💒\n" +
+		"Вы можете написать мне любой вопрос о ваших отношениях в любое время. Я дам совет или подсказку, чтобы общение и взаимопонимание стало ещё теплее. Это работает отдельно от упражнений и дневника, когда захотите. 🫶🏻\n\n" +
+		"💌 Совет от меня: наслаждайтесь процессом, замечайте маленькие радости, делитесь впечатлениями и фиксируйте всё в мини-дневнике.\n" +
+		"Ваши отношения уникальны, и каждая честная беседа, каждое маленькое внимание друг к другу делает их крепче и теплее. 💒🎀"
 
 	return &Bot{
 		telegram:       bot,
@@ -329,6 +337,69 @@ func (b *Bot) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 	case "exercise_week_4":
 		b.handleExerciseWeekCallback(callbackQuery, 4)
 	default:
+		// Проверяем, не является ли это callback для выбора даты уведомления
+		if strings.HasPrefix(data, "schedule_date_") {
+			dateStr := strings.TrimPrefix(data, "schedule_date_")
+			b.handleScheduleDateCallback(callbackQuery, dateStr)
+			return
+		}
+
+		// Проверяем, не является ли это callback для выбора времени уведомления
+		if strings.HasPrefix(data, "schedule_time_") {
+			parts := strings.Split(data, "_")
+			if len(parts) >= 4 {
+				dateStr := parts[2]
+				timeStr := parts[3]
+				b.handleScheduleTimeCallback(callbackQuery, dateStr, timeStr)
+				return
+			}
+		}
+
+		// Проверяем, не является ли это callback для выбора шаблона уведомления
+		if strings.HasPrefix(data, "schedule_template_") {
+			parts := strings.Split(data, "_")
+			if len(parts) >= 5 {
+				dateStr := parts[2]
+				timeStr := parts[3]
+				templateIndex, err := strconv.Atoi(parts[4])
+				if err == nil {
+					b.handleScheduleTemplateCallback(callbackQuery, dateStr, timeStr, templateIndex)
+					return
+				}
+			}
+		}
+
+		// Проверяем, не является ли это callback для мгновенной отправки шаблона
+		if strings.HasPrefix(data, "send_now_template_") {
+			templateIndex, err := strconv.Atoi(strings.TrimPrefix(data, "send_now_template_"))
+			if err == nil {
+				b.handleSendNowTemplateCallback(callbackQuery, templateIndex)
+				return
+			}
+		}
+
+		// Проверяем callback для кастомной даты
+		if data == "schedule_custom_date" {
+			b.handleScheduleCustomDateCallback(callbackQuery)
+			return
+		}
+
+		// Проверяем callback для кастомного времени
+		if strings.HasPrefix(data, "schedule_custom_time_") {
+			dateStr := strings.TrimPrefix(data, "schedule_custom_time_")
+			b.handleScheduleCustomTimeCallback(callbackQuery, dateStr)
+			return
+		}
+
+		// Проверяем callback для удаления уведомления
+		if strings.HasPrefix(data, "delete_notification_") {
+			notificationID, err := strconv.Atoi(strings.TrimPrefix(data, "delete_notification_"))
+			if err == nil {
+				b.handleDeleteNotificationCallback(callbackQuery, notificationID)
+				return
+			}
+		}
+
 		// Проверяем, не является ли это callback для элементов недели
 		if strings.HasPrefix(data, "week_") && strings.Contains(data, "_") {
 			parts := strings.Split(data, "_")
@@ -832,7 +903,7 @@ func (b *Bot) handleSetWelcomeMenuCallback(callbackQuery *tgbotapi.CallbackQuery
 		"Стандартное:\n" +
 		"`/setwelcome Привет! 👋 Я Lovifyy Bot - ваш персональный помощник!`\n\n" +
 		"Для пар:\n" +
-		"`/setwelcome Добро пожаловать в Lovifyy Bot! 💕 Я помогу укрепить ваши отношения через упражнения и дневник.`\n\n" +
+		"`/setwelcome Добро пожаловать в Lovifyy Bot! ❤️ Я помогу укрепить ваши отношения через упражнения и дневник.`\n\n" +
 		"Краткое:\n" +
 		"`/setwelcome Привет! Выберите режим работы:`"
 	b.sendMessage(callbackQuery.Message.Chat.ID, response)
@@ -909,19 +980,45 @@ func (b *Bot) handleScheduleNotificationCallback(callbackQuery *tgbotapi.Callbac
 	}
 
 	response := "⏰ Запланировать уведомление\n\n" +
-		"Отправьте команду в формате:\n" +
-		"`/schedule ДД.ММ.ГГГГ ЧЧ:ММ Текст уведомления`\n\n" +
-		"🕐 Часовой пояс: UTC+5 (Алматы/Ташкент)\n\n" +
-		"Примеры:\n" +
-		"`/schedule 15.10.2025 12:00 Напоминание о упражнениях!`\n" +
-		"`/schedule 20.10.2025 18:30 Время для дневника 💕`\n\n" +
-		"⚠️ Уведомление будет отправлено всем пользователям бота"
+		"🗓️ Выберите дату отправки:\n" +
+		"🕐 Часовой пояс: UTC+5 (Алматы/Ташкент)"
 
-	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+	// Создаем кнопки с датами (сегодня + следующие 6 дней)
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	
+	for i := 0; i < 7; i++ {
+		date := time.Now().AddDate(0, 0, i)
+		dateStr := date.Format("02.01.2006")
+		var dayName string
+		
+		switch i {
+		case 0:
+			dayName = "Сегодня"
+		case 1:
+			dayName = "Завтра"
+		default:
+			dayName = date.Format("Mon")
+		}
+		
+		buttonText := fmt.Sprintf("%s (%s)", dayName, dateStr)
+		callbackData := fmt.Sprintf("schedule_date_%s", dateStr)
+		
+		button := tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackData)
+		buttons = append(buttons, []tgbotapi.InlineKeyboardButton{button})
+	}
+
+	// Добавляем кнопку для ввода своей даты
+	customDateButton := tgbotapi.NewInlineKeyboardButtonData("📅 Своя дата", "schedule_custom_date")
+	buttons = append(buttons, []tgbotapi.InlineKeyboardButton{customDateButton})
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = keyboard
+	b.telegram.Send(msg)
 }
 
-// handleViewNotificationsCallback показывает запланированные уведомления
-func (b *Bot) handleViewNotificationsCallback(callbackQuery *tgbotapi.CallbackQuery) {
+// handleScheduleDateCallback обрабатывает выбор даты для уведомления
+func (b *Bot) handleScheduleDateCallback(callbackQuery *tgbotapi.CallbackQuery, dateStr string) {
 	userID := callbackQuery.From.ID
 
 	if !b.isAdmin(userID) {
@@ -929,12 +1026,353 @@ func (b *Bot) handleViewNotificationsCallback(callbackQuery *tgbotapi.CallbackQu
 		return
 	}
 
-	// TODO: Здесь будет логика чтения запланированных уведомлений из файла
-	response := "📋 Запланированные уведомления\n\n" +
-		"🔄 Функция в разработке...\n\n" +
-		"Скоро здесь будет список всех запланированных уведомлений с возможностью их отмены."
+	response := fmt.Sprintf("🕐 Выберите время отправки\n\n📅 Дата: %s\n🕐 Часовой пояс: UTC+5", dateStr)
 
+	// Создаем кнопки с временем (каждые 2 часа)
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	var currentRow []tgbotapi.InlineKeyboardButton
+	
+	times := []string{"08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"}
+	
+	for i, timeStr := range times {
+		callbackData := fmt.Sprintf("schedule_time_%s_%s", dateStr, timeStr)
+		button := tgbotapi.NewInlineKeyboardButtonData(timeStr, callbackData)
+		currentRow = append(currentRow, button)
+		
+		// Добавляем по 2 кнопки в ряд
+		if len(currentRow) == 2 || i == len(times)-1 {
+			buttons = append(buttons, currentRow)
+			currentRow = []tgbotapi.InlineKeyboardButton{}
+		}
+	}
+
+	// Добавляем кнопку для ввода своего времени
+	customTimeButton := tgbotapi.NewInlineKeyboardButtonData("🕐 Свое время", fmt.Sprintf("schedule_custom_time_%s", dateStr))
+	buttons = append(buttons, []tgbotapi.InlineKeyboardButton{customTimeButton})
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = keyboard
+	b.telegram.Send(msg)
+}
+
+// handleScheduleCustomDateCallback обрабатывает ввод кастомной даты
+func (b *Bot) handleScheduleCustomDateCallback(callbackQuery *tgbotapi.CallbackQuery) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+
+	response := "📅 Введите дату в формате ДД.ММ.ГГГГ\n\n" +
+		"Примеры:\n" +
+		"• 15.10.2025\n" +
+		"• 01.12.2025\n\n" +
+		"🕐 Часовой пояс: UTC+5 (Алматы/Ташкент)"
+
+	// Сохраняем состояние для ввода кастомной даты
+	b.setUserState(userID, "notification_custom_date")
 	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
+// handleScheduleCustomTimeCallback обрабатывает ввод кастомного времени
+func (b *Bot) handleScheduleCustomTimeCallback(callbackQuery *tgbotapi.CallbackQuery, dateStr string) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+
+	response := fmt.Sprintf("🕐 Введите время в формате ЧЧ:ММ\n\n📅 Дата: %s\n\n" +
+		"Примеры:\n" +
+		"• 09:30\n" +
+		"• 15:45\n" +
+		"• 21:00\n\n" +
+		"🕐 Часовой пояс: UTC+5 (Алматы/Ташкент)", dateStr)
+
+	// Сохраняем состояние для ввода кастомного времени
+	b.setUserState(userID, fmt.Sprintf("notification_custom_time_%s", dateStr))
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
+// handleScheduleTimeCallback обрабатывает выбор времени для уведомления
+func (b *Bot) handleScheduleTimeCallback(callbackQuery *tgbotapi.CallbackQuery, dateStr, timeStr string) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+
+	response := fmt.Sprintf("💌 Выберите шаблон сообщения\n\n📅 Дата: %s\n🕐 Время: %s (UTC+5)", dateStr, timeStr)
+
+	// Создаем кнопки с шаблонами сообщений
+	templates := []struct {
+		text     string
+		template string
+	}{
+		{"❤️ Напоминание о дневнике", "Привет! ❤️ Не забудьте заполнить дневник сегодня. Ваши мысли и чувства важны для укрепления отношений!"},
+		{"💑 Упражнения недели", "Время для упражнений! 💑 Новые задания помогут вам лучше понять друг друга."},
+		{"🌟 Мотивация", "Каждый день - это новая возможность стать ближе! 🌟 Цените моменты вместе."},
+		{"📝 Свой текст", "custom"},
+	}
+
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	for i, tmpl := range templates {
+		callbackData := fmt.Sprintf("schedule_template_%s_%s_%d", dateStr, timeStr, i)
+		button := tgbotapi.NewInlineKeyboardButtonData(tmpl.text, callbackData)
+		buttons = append(buttons, []tgbotapi.InlineKeyboardButton{button})
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = keyboard
+	b.telegram.Send(msg)
+}
+
+// handleScheduleTemplateCallback обрабатывает выбор шаблона для уведомления
+func (b *Bot) handleScheduleTemplateCallback(callbackQuery *tgbotapi.CallbackQuery, dateStr, timeStr string, templateIndex int) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+
+	templates := []string{
+		"Привет! ❤️ Не забудьте заполнить дневник сегодня. Ваши мысли и чувства важны для укрепления отношений!",
+		"Время для упражнений! 💑 Новые задания помогут вам лучше понять друг друга.",
+		"Каждый день - это новая возможность стать ближе! 🌟 Цените моменты вместе.",
+		"", // Для кастомного текста
+	}
+
+	if templateIndex == 3 {
+		// Кастомный текст - просим ввести
+		response := fmt.Sprintf("📝 Введите свой текст уведомления\n\n📅 Дата: %s\n🕐 Время: %s (UTC+5)\n\n" +
+			"Просто напишите сообщение следующим сообщением:", dateStr, timeStr)
+		
+		// Сохраняем состояние для ввода кастомного текста
+		b.setUserState(userID, fmt.Sprintf("notification_custom_%s_%s", dateStr, timeStr))
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+
+	if templateIndex >= 0 && templateIndex < len(templates) {
+		messageText := templates[templateIndex]
+		
+		// Сохраняем уведомление в файл
+		if err := b.saveNotification(dateStr, timeStr, messageText); err != nil {
+			log.Printf("Ошибка сохранения уведомления: %v", err)
+			b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Ошибка сохранения уведомления")
+			return
+		}
+		
+		response := fmt.Sprintf("✅ Уведомление запланировано!\n\n📅 Дата: %s\n🕐 Время: %s (UTC+5)\n\n💌 Текст:\n%s\n\n" +
+			"⚠️ Уведомление будет отправлено всем пользователям бота", dateStr, timeStr, messageText)
+		
+		log.Printf("👑 Администратор %d запланировал уведомление на %s %s: %s", userID, dateStr, timeStr, messageText)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+	}
+}
+
+// ScheduledNotification представляет запланированное уведомление
+type ScheduledNotification struct {
+	ID       int    `json:"id"`
+	Date     string `json:"date"`
+	Time     string `json:"time"`
+	Message  string `json:"message"`
+	Created  string `json:"created"`
+}
+
+// handleViewNotificationsCallback показывает запланированные уведомления
+func (b *Bot) handleViewNotificationsCallback(callbackQuery *tgbotapi.CallbackQuery) {
+	userID := callbackQuery.From.ID
+	log.Printf("👑 Администратор %d запросил просмотр уведомлений", userID)
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+
+	// Читаем запланированные уведомления из файла
+	notifications, err := b.loadScheduledNotifications()
+	if err != nil {
+		log.Printf("Ошибка загрузки уведомлений: %v", err)
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Ошибка загрузки уведомлений")
+		return
+	}
+	
+	log.Printf("📋 Загружено %d уведомлений", len(notifications))
+
+	if len(notifications) == 0 {
+		response := "📋 Запланированные уведомления\n\n" +
+			"📭 Нет запланированных уведомлений\n\n" +
+			"Используйте кнопку 'Запланировать уведомление' для создания нового."
+		
+		log.Printf("📤 Отправляем сообщение о пустом списке")
+		msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+		_, err := b.telegram.Send(msg)
+		if err != nil {
+			log.Printf("❌ Ошибка отправки сообщения о пустом списке: %v", err)
+		} else {
+			log.Printf("✅ Сообщение о пустом списке отправлено успешно")
+		}
+		return
+	}
+
+	response := "📋 Запланированные уведомления\n\n"
+	var buttons [][]tgbotapi.InlineKeyboardButton
+
+	for _, notification := range notifications {
+		// Показываем полное сообщение без обрезки
+		messagePreview := notification.Message
+		
+		response += fmt.Sprintf("🔔 ID: %d\n📅 %s в %s\n💌 %s\n\n", 
+			notification.ID, notification.Date, notification.Time, b.cleanUTF8(messagePreview))
+		
+		// Добавляем кнопку для удаления каждого уведомления
+		deleteButton := tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("🗑️ Удалить #%d", notification.ID), 
+			fmt.Sprintf("delete_notification_%d", notification.ID))
+		buttons = append(buttons, []tgbotapi.InlineKeyboardButton{deleteButton})
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = keyboard
+	
+	log.Printf("📤 Отправляем ответ с %d кнопками", len(buttons))
+	_, err = b.telegram.Send(msg)
+	if err != nil {
+		log.Printf("❌ Ошибка отправки сообщения: %v", err)
+	} else {
+		log.Printf("✅ Сообщение отправлено успешно")
+	}
+}
+
+// loadScheduledNotifications загружает запланированные уведомления из файла
+func (b *Bot) loadScheduledNotifications() ([]ScheduledNotification, error) {
+	filename := "scheduled_notifications.json"
+	
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []ScheduledNotification{}, nil
+		}
+		return nil, err
+	}
+
+	var notifications []ScheduledNotification
+	if err := json.Unmarshal(data, &notifications); err != nil {
+		return nil, err
+	}
+
+	return notifications, nil
+}
+
+// min возвращает минимальное из двух чисел
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// handleDeleteNotificationCallback обрабатывает удаление уведомления
+func (b *Bot) handleDeleteNotificationCallback(callbackQuery *tgbotapi.CallbackQuery, notificationID int) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+
+	// Загружаем текущие уведомления
+	notifications, err := b.loadScheduledNotifications()
+	if err != nil {
+		log.Printf("Ошибка загрузки уведомлений: %v", err)
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Ошибка загрузки уведомлений")
+		return
+	}
+
+	// Ищем и удаляем уведомление
+	var updatedNotifications []ScheduledNotification
+	var deletedNotification *ScheduledNotification
+	
+	for _, notification := range notifications {
+		if notification.ID == notificationID {
+			deletedNotification = &notification
+		} else {
+			updatedNotifications = append(updatedNotifications, notification)
+		}
+	}
+
+	if deletedNotification == nil {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Уведомление не найдено")
+		return
+	}
+
+	// Сохраняем обновленный список
+	if err := b.saveScheduledNotifications(updatedNotifications); err != nil {
+		log.Printf("Ошибка сохранения уведомлений: %v", err)
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Ошибка сохранения")
+		return
+	}
+
+	response := fmt.Sprintf("✅ Уведомление удалено!\n\n🔔 ID: %d\n📅 %s в %s\n💌 %s", 
+		deletedNotification.ID, deletedNotification.Date, deletedNotification.Time, deletedNotification.Message)
+	
+	log.Printf("👑 Администратор %d удалил уведомление ID %d", userID, notificationID)
+	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+}
+
+// saveNotification сохраняет новое уведомление
+func (b *Bot) saveNotification(dateStr, timeStr, messageText string) error {
+	// Загружаем существующие уведомления
+	notifications, err := b.loadScheduledNotifications()
+	if err != nil {
+		return err
+	}
+
+	// Генерируем новый ID
+	maxID := 0
+	for _, notification := range notifications {
+		if notification.ID > maxID {
+			maxID = notification.ID
+		}
+	}
+
+	// Создаем новое уведомление с UTC+5 временем создания
+	location := time.FixedZone("UTC+5", 5*60*60)
+	now := time.Now().In(location)
+	
+	newNotification := ScheduledNotification{
+		ID:      maxID + 1,
+		Date:    dateStr,
+		Time:    timeStr,
+		Message: messageText,
+		Created: now.Format("02.01.2006 15:04"),
+	}
+
+	// Добавляем к списку
+	notifications = append(notifications, newNotification)
+
+	// Сохраняем
+	return b.saveScheduledNotifications(notifications)
+}
+
+// saveScheduledNotifications сохраняет уведомления в файл
+func (b *Bot) saveScheduledNotifications(notifications []ScheduledNotification) error {
+	filename := "scheduled_notifications.json"
+	
+	data, err := json.MarshalIndent(notifications, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filename, data, 0644)
 }
 
 // handleSendNowCallback обрабатывает отправку уведомления сейчас
@@ -946,15 +1384,76 @@ func (b *Bot) handleSendNowCallback(callbackQuery *tgbotapi.CallbackQuery) {
 		return
 	}
 
-	response := "📤 Отправить уведомление сейчас\n\n" +
-		"Отправьте команду в формате:\n" +
-		"`/broadcast Текст уведомления`\n\n" +
-		"Примеры:\n" +
-		"`/broadcast Привет! Не забудьте заполнить дневник сегодня 💕`\n" +
-		"`/broadcast Новые упражнения уже доступны! 👩🏼‍❤️‍👨🏻`\n\n" +
-		"⚠️ Сообщение будет немедленно отправлено всем пользователям бота"
+	response := "📤 Отправить уведомление сейчас\n\n💌 Выберите шаблон сообщения:"
 
-	b.sendMessage(callbackQuery.Message.Chat.ID, response)
+	// Создаем кнопки с шаблонами для мгновенной отправки
+	templates := []struct {
+		text     string
+		template string
+	}{
+		{"❤️ Напоминание о дневнике", "Привет! ❤️ Не забудьте заполнить дневник сегодня. Ваши мысли и чувства важны для укрепления отношений!"},
+		{"💑 Упражнения недели", "Время для упражнений! 💑 Новые задания помогут вам лучше понять друг друга."},
+		{"🌟 Мотивация", "Каждый день - это новая возможность стать ближе! 🌟 Цените моменты вместе."},
+		{"📝 Свой текст", "custom"},
+	}
+
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	for i, tmpl := range templates {
+		callbackData := fmt.Sprintf("send_now_template_%d", i)
+		button := tgbotapi.NewInlineKeyboardButtonData(tmpl.text, callbackData)
+		buttons = append(buttons, []tgbotapi.InlineKeyboardButton{button})
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = keyboard
+	b.telegram.Send(msg)
+}
+
+// handleSendNowTemplateCallback обрабатывает мгновенную отправку шаблона
+func (b *Bot) handleSendNowTemplateCallback(callbackQuery *tgbotapi.CallbackQuery, templateIndex int) {
+	userID := callbackQuery.From.ID
+
+	if !b.isAdmin(userID) {
+		b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		return
+	}
+
+	templates := []string{
+		"Привет! ❤️ Не забудьте заполнить дневник сегодня. Ваши мысли и чувства важны для укрепления отношений!",
+		"Время для упражнений! 💑 Новые задания помогут вам лучше понять друг друга.",
+		"Каждый день - это новая возможность стать ближе! 🌟 Цените моменты вместе.",
+		"", // Для кастомного текста
+	}
+
+	if templateIndex == 3 {
+		// Кастомный текст - просим ввести
+		response := "📝 Введите текст для мгновенной отправки\n\n" +
+			"Просто напишите сообщение следующим сообщением:"
+		
+		// Сохраняем состояние для ввода кастомного текста
+		b.setUserState(userID, "broadcast_custom")
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+		return
+	}
+
+	if templateIndex >= 0 && templateIndex < len(templates) {
+		messageText := templates[templateIndex]
+		
+		// Отправляем уведомление всем пользователям
+		sentCount, err := b.broadcastMessage(messageText)
+		if err != nil {
+			log.Printf("Ошибка отправки уведомления: %v", err)
+			b.sendMessage(callbackQuery.Message.Chat.ID, "❌ Ошибка отправки уведомления")
+			return
+		}
+		
+		response := fmt.Sprintf("✅ Уведомление отправлено!\n\n💌 Текст:\n%s\n\n" +
+			"📤 Сообщение отправлено %d пользователям", messageText, sentCount)
+		
+		log.Printf("👑 Администратор %d отправил уведомление %d пользователям: %s", userID, sentCount, messageText)
+		b.sendMessage(callbackQuery.Message.Chat.ID, response)
+	}
 }
 
 // handleExerciseWeekCallback обрабатывает выбор недели для настройки
@@ -1070,7 +1569,7 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 		// Создаем простую inline клавиатуру с тремя основными функциями
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("👩🏼‍❤️‍👨🏻 Упражнение недели", "advice"),
+				tgbotapi.NewInlineKeyboardButtonData("💑 Упражнение недели", "advice"),
 			),
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData("💌 Мини-дневник", "diary"),
@@ -1370,7 +1869,7 @@ func (b *Bot) handleCommand(message *tgbotapi.Message) {
 			"Стандартное:\n" +
 			"`/setwelcome Привет! 👋 Я Lovifyy Bot - ваш персональный помощник!`\n\n" +
 			"Для пар:\n" +
-			"`/setwelcome Добро пожаловать в Lovifyy Bot! 💕 Я помогу укрепить ваши отношения через упражнения и дневник.`\n\n" +
+			"`/setwelcome Добро пожаловать в Lovifyy Bot! ❤️ Я помогу укрепить ваши отношения через упражнения и дневник.`\n\n" +
 			"Краткое:\n" +
 			"`/setwelcome Привет! Выберите режим работы:`"
 		b.sendMessage(message.Chat.ID, response)
@@ -1469,13 +1968,40 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 		b.setUserState(userID, "chat")
 	}
 
+	// Обработка состояний уведомлений
+	if userState == "notification_custom_date" {
+		b.handleCustomDateInput(message)
+		return
+	}
+
+	if strings.HasPrefix(userState, "notification_custom_time_") {
+		dateStr := strings.TrimPrefix(userState, "notification_custom_time_")
+		b.handleCustomTimeInput(message, dateStr)
+		return
+	}
+
+	if strings.HasPrefix(userState, "notification_custom_") && strings.Contains(userState, "_") {
+		parts := strings.Split(userState, "_")
+		if len(parts) >= 4 && parts[0] == "notification" && parts[1] == "custom" {
+			dateStr := parts[2]
+			timeStr := parts[3]
+			b.handleCustomNotificationTextInput(message, dateStr, timeStr)
+			return
+		}
+	}
+
+	if userState == "broadcast_custom" {
+		b.handleCustomBroadcastInput(message)
+		return
+	}
+
 	// Если состояние пустое (пользователь еще не выбрал режим), показываем главное меню
 	if userState == "" {
 		response := "Привет! 👋 Выберите режим работы:"
 
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("👩🏼‍❤️‍👨🏻 Упражнение недели", "advice"),
+				tgbotapi.NewInlineKeyboardButtonData("💑 Упражнение недели", "advice"),
 			),
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData("💌 Мини-дневник", "diary"),
@@ -1497,7 +2023,7 @@ func (b *Bot) handleAIMessage(message *tgbotapi.Message) {
 
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("👩🏼‍❤️‍👨🏻 Упражнение недели", "advice"),
+				tgbotapi.NewInlineKeyboardButtonData("💑 Упражнение недели", "advice"),
 			),
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData("💌 Мини-дневник", "diary"),
@@ -2267,4 +2793,286 @@ func (b *Bot) getDiaryEntriesByWeekAndGender(userID int64, week int, gender stri
 	}
 
 	return allWeekEntries, nil
+}
+
+// handleCustomDateInput обрабатывает ввод кастомной даты
+func (b *Bot) handleCustomDateInput(message *tgbotapi.Message) {
+	userID := message.From.ID
+	dateStr := strings.TrimSpace(message.Text)
+
+	// Проверяем формат даты (ДД.ММ.ГГГГ)
+	_, err := time.Parse("02.01.2006", dateStr)
+	if err != nil {
+		response := "❌ Неверный формат даты!\n\n" +
+			"Используйте формат ДД.ММ.ГГГГ\n" +
+			"Например: 15.10.2025"
+		b.sendMessage(message.Chat.ID, response)
+		return
+	}
+
+	// Сбрасываем состояние и переходим к выбору времени
+	b.setUserState(userID, "")
+	b.handleScheduleDateCallback(&tgbotapi.CallbackQuery{
+		From:    message.From,
+		Message: message,
+	}, dateStr)
+}
+
+// handleCustomTimeInput обрабатывает ввод кастомного времени
+func (b *Bot) handleCustomTimeInput(message *tgbotapi.Message, dateStr string) {
+	userID := message.From.ID
+	timeStr := strings.TrimSpace(message.Text)
+
+	// Проверяем формат времени (ЧЧ:ММ)
+	_, err := time.Parse("15:04", timeStr)
+	if err != nil {
+		response := "❌ Неверный формат времени!\n\n" +
+			"Используйте формат ЧЧ:ММ\n" +
+			"Например: 15:30"
+		b.sendMessage(message.Chat.ID, response)
+		return
+	}
+
+	// Сбрасываем состояние и переходим к выбору шаблона
+	b.setUserState(userID, "")
+	b.handleScheduleTimeCallback(&tgbotapi.CallbackQuery{
+		From:    message.From,
+		Message: message,
+	}, dateStr, timeStr)
+}
+
+// handleCustomNotificationTextInput обрабатывает ввод кастомного текста уведомления
+func (b *Bot) handleCustomNotificationTextInput(message *tgbotapi.Message, dateStr, timeStr string) {
+	userID := message.From.ID
+	messageText := strings.TrimSpace(message.Text)
+
+	if len(messageText) == 0 {
+		response := "❌ Текст уведомления не может быть пустым!"
+		b.sendMessage(message.Chat.ID, response)
+		return
+	}
+
+	// Сбрасываем состояние
+	b.setUserState(userID, "")
+
+	// Сохраняем уведомление в файл
+	if err := b.saveNotification(dateStr, timeStr, messageText); err != nil {
+		log.Printf("Ошибка сохранения уведомления: %v", err)
+		b.sendMessage(message.Chat.ID, "❌ Ошибка сохранения уведомления")
+		return
+	}
+
+	response := fmt.Sprintf("✅ Уведомление запланировано!\n\n📅 Дата: %s\n🕐 Время: %s (UTC+5)\n\n💌 Текст:\n%s\n\n" +
+		"⚠️ Уведомление будет отправлено всем пользователям бота", dateStr, timeStr, messageText)
+	
+	log.Printf("👑 Администратор %d запланировал уведомление на %s %s: %s", userID, dateStr, timeStr, messageText)
+	b.sendMessage(message.Chat.ID, response)
+}
+
+// handleCustomBroadcastInput обрабатывает ввод кастомного текста для мгновенной отправки
+func (b *Bot) handleCustomBroadcastInput(message *tgbotapi.Message) {
+	userID := message.From.ID
+	messageText := strings.TrimSpace(message.Text)
+
+	if len(messageText) == 0 {
+		response := "❌ Текст сообщения не может быть пустым!"
+		b.sendMessage(message.Chat.ID, response)
+		return
+	}
+
+	// Сбрасываем состояние
+	b.setUserState(userID, "")
+
+	// Отправляем уведомление всем пользователям
+	sentCount, err := b.broadcastMessage(messageText)
+	if err != nil {
+		log.Printf("Ошибка отправки уведомления: %v", err)
+		b.sendMessage(message.Chat.ID, "❌ Ошибка отправки уведомления")
+		return
+	}
+
+	response := fmt.Sprintf("✅ Уведомление отправлено!\n\n💌 Текст:\n%s\n\n" +
+		"📤 Сообщение отправлено %d пользователям", messageText, sentCount)
+	
+	log.Printf("👑 Администратор %d отправил уведомление %d пользователям: %s", userID, sentCount, messageText)
+	b.sendMessage(message.Chat.ID, response)
+}
+
+// cleanUTF8 очищает строку от невалидных UTF-8 символов
+func (b *Bot) cleanUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	
+	// Если строка содержит невалидные UTF-8 символы, очищаем её
+	cleaned := strings.ToValidUTF8(s, "")
+	return cleaned
+}
+
+// broadcastMessage отправляет сообщение всем пользователям бота
+func (b *Bot) broadcastMessage(messageText string) (int, error) {
+	// Получаем список всех пользователей из истории чатов
+	userIDs, err := b.getAllUserIDs()
+	if err != nil {
+		return 0, err
+	}
+
+	sentCount := 0
+	for _, userID := range userIDs {
+		// Отправляем сообщение каждому пользователю
+		msg := tgbotapi.NewMessage(userID, messageText)
+		_, err := b.telegram.Send(msg)
+		if err != nil {
+			log.Printf("Ошибка отправки сообщения пользователю %d: %v", userID, err)
+			continue // Продолжаем отправку другим пользователям
+		}
+		sentCount++
+		
+		// Небольшая задержка чтобы не превысить лимиты API
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	return sentCount, nil
+}
+
+// getAllUserIDs получает список всех пользователей из файлов истории
+func (b *Bot) getAllUserIDs() ([]int64, error) {
+	userIDsMap := make(map[int64]bool)
+	
+	// Читаем папку chat_history
+	files, err := os.ReadDir("chat_history")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []int64{}, nil
+		}
+		return nil, err
+	}
+
+	// Извлекаем ID пользователей из имен файлов
+	for _, file := range files {
+		if strings.HasPrefix(file.Name(), "user_") && strings.HasSuffix(file.Name(), ".json") {
+			// Извлекаем ID из имени файла: user_123456.json
+			idStr := strings.TrimPrefix(file.Name(), "user_")
+			idStr = strings.TrimSuffix(idStr, ".json")
+			
+			if userID, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+				userIDsMap[userID] = true
+			}
+		}
+	}
+
+	// Также читаем папки дневников для получения дополнительных пользователей
+	diaryDirs := []string{"diary_entries/diary_questions", "diary_entries/diary_jointquestions", "diary_entries/diary_thoughts"}
+	for _, dir := range diaryDirs {
+		b.addUsersFromDiaryDir(dir, userIDsMap)
+	}
+
+	// Конвертируем map в slice
+	var userIDs []int64
+	for userID := range userIDsMap {
+		userIDs = append(userIDs, userID)
+	}
+
+	return userIDs, nil
+}
+
+// addUsersFromDiaryDir добавляет пользователей из папки дневника
+func (b *Bot) addUsersFromDiaryDir(dir string, userIDsMap map[int64]bool) {
+	// Проходим по всем подпапкам (недели и гендеры)
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		
+		if strings.HasPrefix(info.Name(), "user_") && strings.HasSuffix(info.Name(), ".json") {
+			// Извлекаем ID из имени файла: user_123456.json
+			idStr := strings.TrimPrefix(info.Name(), "user_")
+			idStr = strings.TrimSuffix(idStr, ".json")
+			
+			if userID, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+				userIDsMap[userID] = true
+			}
+		}
+		return nil
+	})
+}
+
+// StartNotificationScheduler запускает планировщик уведомлений
+func (b *Bot) StartNotificationScheduler() {
+	log.Println("⏰ Планировщик уведомлений запущен")
+	
+	// Проверяем уведомления каждую минуту
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			b.checkAndSendScheduledNotifications()
+		}
+	}
+}
+
+// checkAndSendScheduledNotifications проверяет и отправляет запланированные уведомления
+func (b *Bot) checkAndSendScheduledNotifications() {
+	notifications, err := b.loadScheduledNotifications()
+	if err != nil {
+		log.Printf("Ошибка загрузки уведомлений: %v", err)
+		return
+	}
+
+	// Используем UTC+5 вручную
+	location := time.FixedZone("UTC+5", 5*60*60)
+	now := time.Now().In(location)
+	currentDate := now.Format("02.01.2006")
+	currentTime := now.Format("15:04")
+	
+	log.Printf("🕐 Проверка уведомлений: %s %s (UTC+5)", currentDate, currentTime)
+
+	var remainingNotifications []ScheduledNotification
+
+	for _, notification := range notifications {
+		// Парсим время уведомления и добавляем 5 часов для UTC
+		notificationTime, err := time.Parse("15:04", notification.Time)
+		if err != nil {
+			log.Printf("Ошибка парсинга времени %s: %v", notification.Time, err)
+			remainingNotifications = append(remainingNotifications, notification)
+			continue
+		}
+		
+		// Отнимаем 5 часов от времени уведомления для конвертации в UTC
+		utcTime := notificationTime.Add(-5 * time.Hour)
+		utcTimeStr := utcTime.Format("15:04")
+		
+		// Получаем текущее UTC время
+		nowUTC := time.Now().UTC()
+		currentUTCTime := nowUTC.Format("15:04")
+		
+		// Проверяем, пришло ли время отправки (сравниваем дату с UTC+5, время с UTC)
+		if notification.Date == currentDate && utcTimeStr == currentUTCTime {
+			log.Printf("⏰ Отправляем запланированное уведомление ID %d (UTC+5: %s %s -> UTC: %s %s)", 
+				notification.ID, notification.Date, notification.Time, currentDate, utcTimeStr)
+			
+			// Отправляем уведомление
+			sentCount, err := b.broadcastMessage(notification.Message)
+			if err != nil {
+				log.Printf("Ошибка отправки запланированного уведомления ID %d: %v", notification.ID, err)
+			} else {
+				log.Printf("✅ Запланированное уведомление ID %d отправлено %d пользователям", notification.ID, sentCount)
+			}
+			
+			// Не добавляем в remainingNotifications - уведомление отправлено и удаляется
+		} else {
+			// Оставляем уведомление для будущей отправки
+			remainingNotifications = append(remainingNotifications, notification)
+		}
+	}
+
+	// Сохраняем обновленный список уведомлений (без отправленных)
+	if len(remainingNotifications) != len(notifications) {
+		err := b.saveScheduledNotifications(remainingNotifications)
+		if err != nil {
+			log.Printf("Ошибка сохранения обновленного списка уведомлений: %v", err)
+		}
+	}
 }
