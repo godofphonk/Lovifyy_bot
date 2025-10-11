@@ -96,7 +96,8 @@ func NewBot(telegramToken, systemPrompt string, adminIDs []int64) *Bot {
 	// Инициализируем Telegram бота
 	bot, err := tgbotapi.NewBotAPI(telegramToken)
 	if err != nil {
-		log.Fatal("Ошибка создания Telegram бота:", err)
+		log.Printf("❌ Ошибка создания Telegram бота: %v", err)
+		panic(fmt.Sprintf("не удалось создать Telegram бота: %v", err))
 	}
 
 	bot.Debug = false
@@ -126,11 +127,19 @@ func NewBot(telegramToken, systemPrompt string, adminIDs []int64) *Bot {
 	// Инициализируем AI клиента (используем OpenAI)
 	aiClient := ai.NewOpenAIClient("gpt-4o-mini")
 
-	// Проверяем доступность AI
-	if err := aiClient.TestConnection(); err != nil {
-		log.Fatal("AI недоступен:", err)
+	// Проверяем доступность AI (можно пропустить)
+	skipAICheck := os.Getenv("SKIP_AI_CHECK") == "true"
+	if skipAICheck {
+		log.Println("⏭️ Проверка AI пропущена (SKIP_AI_CHECK=true)")
+		log.Println("🤖 Бот будет работать без AI функций")
+	} else {
+		if err := aiClient.TestConnection(); err != nil {
+			log.Printf("⚠️ AI недоступен: %v", err)
+			log.Println("🤖 Бот будет работать без AI функций")
+		} else {
+			log.Println("✅ AI подключен успешно!")
+		}
 	}
-	log.Println("✅ AI подключен успешно!")
 
 	// Инициализируем систему истории
 	historyManager := history.NewManager()

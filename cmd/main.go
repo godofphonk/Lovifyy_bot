@@ -12,9 +12,13 @@ import (
 
 func main() {
 	// Загружаем переменные окружения
-	err := godotenv.Load()
+	err := godotenv.Load(".env")
 	if err != nil {
-		log.Println("Файл .env не найден, используем системные переменные окружения")
+		// Пробуем альтернативные пути
+		err2 := godotenv.Load("/app/.env")
+		if err2 != nil {
+			log.Println("Файл .env не найден, используем системные переменные окружения")
+		}
 	}
 
 	// Получаем токен бота

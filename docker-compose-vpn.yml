@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # Windscribe VPN Free
+  windscribe:
+    image: qmcgaw/gluetun
+    container_name: windscribe_free
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VPN_SERVICE_PROVIDER=windscribe
+      - OPENVPN_USER=papochkaphonk
+      - OPENVPN_PASSWORD=yuhTfeQzVEhg!58
+      - SERVER_REGIONS=US East,Netherlands,Germany
+      - DOT=off
+      - DNS_ADDRESS=8.8.8.8
+    ports:
+      - "8889:8888/tcp"
+    restart: unless-stopped
+
+  # Telegram бот через VPN
+  lovifyy_bot:
+    build: .
+    container_name: lovifyy_bot
+    network_mode: "service:windscribe"
+    env_file:
+      - .env
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SYSTEM_PROMPT=${SYSTEM_PROMPT}
+      - ADMIN_IDS=${ADMIN_IDS}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./chat_history:/app/chat_history
+      - ./diary_entries:/app/diary_entries
+      - ./exercises:/app/exercises
+    restart: unless-stopped
+    depends_on:
+      - windscribe
