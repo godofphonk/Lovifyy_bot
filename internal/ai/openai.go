@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
+	"golang.org/x/net/proxy"
 )
 
 // OpenAIClient клиент для работы с OpenAI API
@@ -84,10 +86,8 @@ func (c *OpenAIClient) GenerateWithHistory(messages []OpenAIMessage) (string, er
 		return "", fmt.Errorf("ошибка создания JSON: %w", err)
 	}
 
-	// Создаем HTTP клиент с таймаутом
-	client := &http.Client{
-		Timeout: 30 * time.Second, // OpenAI обычно отвечает быстро
-	}
+	// Создаем HTTP клиент с поддержкой прокси
+	client := c.createHTTPClient()
 
 	// Создаем контекст с таймаутом
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -164,4 +164,50 @@ func (c *OpenAIClient) SetModel(model string) {
 // GetModel возвращает текущую модель
 func (c *OpenAIClient) GetModel() string {
 	return c.model
+}
+
+// createHTTPClient создает HTTP клиент с поддержкой прокси
+func (c *OpenAIClient) createHTTPClient() *http.Client {
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Проверяем переменные окружения для прокси
+	proxyURL := os.Getenv("HTTPS_PROXY")
+	if proxyURL == "" {
+		proxyURL = os.Getenv("HTTP_PROXY")
+	}
+	if proxyURL == "" {
+		proxyURL = os.Getenv("ALL_PROXY")
+	}
+
+	if proxyURL != "" {
+		fmt.Printf("🌐 Используем прокси: %s\n", proxyURL)
+		
+		parsedURL, err := url.Parse(proxyURL)
+		if err != nil {
+			fmt.Printf("❌ Ошибка парсинга прокси URL: %v\n", err)
+			return client
+		}
+
+		// Поддержка SOCKS5 прокси
+		if parsedURL.Scheme == "socks5" {
+			dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, nil, proxy.Direct)
+			if err != nil {
+				fmt.Printf("❌ Ошибка создания SOCKS5 прокси: %v\n", err)
+				return client
+			}
+			
+			client.Transport = &http.Transport{
+				Dial: dialer.Dial,
+			}
+		} else {
+			// HTTP/HTTPS прокси
+			client.Transport = &http.Transport{
+				Proxy: http.ProxyURL(parsedURL),
+			}
+		}
+	}
+
+	return client
 }
