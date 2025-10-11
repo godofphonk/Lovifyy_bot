@@ -1,27 +1,7 @@
 version: '3.8'
 
 services:
-  # Ollama сервис для локального ИИ
-  ollama:
-    image: ollama/ollama:latest
-    container_name: lovifyy_ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    environment:
-      - OLLAMA_HOST=0.0.0.0
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    networks:
-      - lovifyy_network
-
-  # Telegram бот
+  # Telegram бот с OpenAI API
   lovifyy_bot:
     build: .
     container_name: lovifyy_bot
@@ -35,29 +15,3 @@ services:
       - ./diary_entries:/app/diary_entries
       - ./exercises:/app/exercises
     restart: unless-stopped
-    networks:
-      - lovifyy_network
-
-  # Инициализация модели Ollama (запускается один раз)
-  ollama_init:
-    image: ollama/ollama:latest
-    container_name: lovifyy_ollama_init
-    depends_on:
-      ollama:
-        condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      "echo 'Загружаем модель gemma3:1b...' &&
-       OLLAMA_HOST=http://ollama:11434 ollama pull gemma3:1b &&
-       echo 'Модель успешно загружена!'"
-    networks:
-      - lovifyy_network
-    restart: "no"
-
-networks:
-  lovifyy_network:
-    driver: bridge
-
-volumes:
-  ollama_data:
-    driver: local
