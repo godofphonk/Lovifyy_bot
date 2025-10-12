@@ -17,6 +17,8 @@ type ScheduledNotification struct {
 	SendAt     time.Time              `json:"send_at"`
 	Recipients []int64                `json:"recipients"`
 	CreatedAt  time.Time              `json:"created_at"`
+	Message    string                 `json:"message,omitempty"`    // Предварительно сгенерированное сообщение
+	CustomText string                 `json:"custom_text,omitempty"` // Кастомный текст для кастомных уведомлений
 }
 
 // scheduler state
@@ -69,13 +71,45 @@ func (ns *NotificationService) ListScheduled() ([]ScheduledNotification, error) 
 func (ns *NotificationService) ScheduleNotification(sendAt time.Time, typ models.NotificationType, recipients []int64) (string, error) {
 	items, err := ns.LoadSchedule()
 	if err != nil { return "", err }
+	
 	id := fmt.Sprintf("job_%d", time.Now().UnixNano())
+	
+	// Генерируем сообщение заранее для предпросмотра
+	var message string
+	if typ != "" { // Только для стандартных типов
+		message, err = ns.GenerateNotification(typ)
+		if err != nil {
+			// Если не удалось сгенерировать, сохраняем без сообщения
+			message = ""
+		}
+	}
+	
 	items = append(items, ScheduledNotification{
 		ID: id,
 		Type: typ,
 		SendAt: sendAt,
 		Recipients: recipients,
 		CreatedAt: time.Now(),
+		Message: message,
+	})
+	if err := ns.saveSchedule(items); err != nil { return "", err }
+	return id, nil
+}
+
+// ScheduleCustomNotification планирует кастомное уведомление с заданным текстом
+func (ns *NotificationService) ScheduleCustomNotification(sendAt time.Time, customText string, recipients []int64) (string, error) {
+	items, err := ns.LoadSchedule()
+	if err != nil { return "", err }
+	
+	id := fmt.Sprintf("job_%d", time.Now().UnixNano())
+	
+	items = append(items, ScheduledNotification{
+		ID: id,
+		Type: "custom", // Специальный тип для кастомных уведомлений
+		SendAt: sendAt,
+		Recipients: recipients,
+		CreatedAt: time.Now(),
+		CustomText: customText,
 	})
 	if err := ns.saveSchedule(items); err != nil { return "", err }
 	return id, nil

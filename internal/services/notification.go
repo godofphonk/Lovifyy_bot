@@ -16,19 +16,22 @@ import (
 
 // NotificationService управляет уведомлениями
 type NotificationService struct {
-	bot       *tgbotapi.BotAPI
-	ai        *ai.OpenAIClient
-	templates []models.NotificationTemplate
-	dataDir   string
+	bot         *tgbotapi.BotAPI
+	ai          *ai.OpenAIClient
+	templates   []models.NotificationTemplate
+	dataDir     string
+	userStorage *models.UserStorage
 }
 
 // NewNotificationService создает новый сервис уведомлений
 func NewNotificationService(bot *tgbotapi.BotAPI, ai *ai.OpenAIClient) *NotificationService {
+	dataDir := "data/notifications"
 	service := &NotificationService{
-		bot:       bot,
-		ai:        ai,
-		templates: models.GetDefaultTemplates(),
-		dataDir:   "data/notifications",
+		bot:         bot,
+		ai:          ai,
+		templates:   models.GetDefaultTemplates(),
+		dataDir:     dataDir,
+		userStorage: models.NewUserStorage("data"),
 	}
 	
 	// Создаем директорию для данных
@@ -101,10 +104,46 @@ func (ns *NotificationService) GenerateNotification(notificationType models.Noti
 
 // SendNotificationToAll отправляет уведомление всем пользователям
 func (ns *NotificationService) SendNotificationToAll(message string) error {
-	// Здесь должна быть логика получения списка всех пользователей
-	// Пока что это заглушка
 	log.Printf("📢 Отправка уведомления всем пользователям: %s", message)
+	
+	// Получаем список всех активных пользователей из JSON файла
+	userIDs, err := ns.userStorage.GetUserIDs()
+	if err != nil {
+		log.Printf("❌ Ошибка получения списка пользователей: %v", err)
+		// Fallback: отправляем только админам
+		userIDs = []int64{1805441944} // ID админа
+	}
+	
+	if len(userIDs) == 0 {
+		log.Printf("⚠️ Нет активных пользователей для отправки уведомлений")
+		return nil
+	}
+	
+	successCount := 0
+	errorCount := 0
+	
+	for _, userID := range userIDs {
+		msg := tgbotapi.NewMessage(userID, message)
+		msg.ParseMode = "HTML"
+		
+		_, err := ns.bot.Send(msg)
+		if err != nil {
+			log.Printf("❌ Ошибка отправки уведомления пользователю %d: %v", userID, err)
+			errorCount++
+			continue
+		}
+		log.Printf("✅ Уведомление отправлено пользователю %d", userID)
+		successCount++
+	}
+	
+	log.Printf("📊 Статистика отправки: успешно %d, ошибок %d, всего %d", successCount, errorCount, len(userIDs))
 	return nil
+}
+
+// SendCustomNotification отправляет кастомное уведомление всем пользователям
+func (ns *NotificationService) SendCustomNotification(message string) error {
+	// Используем существующий метод для отправки всем
+	return ns.SendNotificationToAll(message)
 }
 
 // SendNotificationToUser отправляет уведомление конкретному пользователю
@@ -170,4 +209,19 @@ func (ns *NotificationService) AddTemplate(template models.NotificationTemplate)
 	template.UpdatedAt = time.Now()
 	ns.templates = append(ns.templates, template)
 	ns.saveTemplates()
+}
+
+// RegisterUser регистрирует пользователя в системе уведомлений
+func (ns *NotificationService) RegisterUser(userID int64, username string) error {
+	return ns.userStorage.AddUser(userID, username)
+}
+
+// UpdateUserActivity обновляет активность пользователя
+func (ns *NotificationService) UpdateUserActivity(userID int64) error {
+	return ns.userStorage.UpdateLastSeen(userID)
+}
+
+// GetUserCount возвращает количество активных пользователей
+func (ns *NotificationService) GetUserCount() (int, error) {
+	return ns.userStorage.GetUserCount()
 }

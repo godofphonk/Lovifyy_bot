@@ -23,7 +23,7 @@ func main() {
 	startTime := time.Now()
 
 	// Загружаем конфигурацию
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load()
 	if err != nil {
 		fmt.Printf("❌ Failed to load configuration: %v\n", err)
 		os.Exit(1)
@@ -43,16 +43,14 @@ func main() {
 		metricsInstance = metrics.NewMetrics()
 		log.Info("Metrics system initialized")
 
-		// Запускаем сервер метрик
-		if cfg.Monitoring.EnablePrometheus {
-			go func() {
-				port := fmt.Sprintf("%d", cfg.Server.MetricsPort)
-				log.WithField("port", port).Info("Starting metrics server")
-				if err := metricsInstance.StartMetricsServer(port); err != nil {
-					log.WithError(err).Error("Failed to start metrics server")
-				}
-			}()
-		}
+		// Запускаем сервер метрик (используем порт health check + 1)
+		go func() {
+			port := fmt.Sprintf("%d", cfg.Monitoring.HealthCheckPort+1)
+			log.WithField("port", port).Info("Starting metrics server")
+			if err := metricsInstance.StartMetricsServer(port); err != nil {
+				log.WithError(err).Error("Failed to start metrics server")
+			}
+		}()
 
 		// Запускаем health check сервер
 		go func() {
@@ -65,7 +63,7 @@ func main() {
 	}
 
 	// Инициализируем graceful shutdown
-	shutdownManager := shutdown.NewPriorityManager(log, cfg.Server.ShutdownTimeout)
+	shutdownManager := shutdown.NewPriorityManager(log, 30*time.Second)
 
 	// Создаем контекст с отменой
 	_, cancel := context.WithCancel(context.Background())
