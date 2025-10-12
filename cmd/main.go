@@ -21,7 +21,7 @@ var (
 
 func main() {
 	startTime := time.Now()
-	
+
 	// Загружаем конфигурацию
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -42,7 +42,7 @@ func main() {
 	if cfg.Monitoring.Enabled {
 		metricsInstance = metrics.NewMetrics()
 		log.Info("Metrics system initialized")
-		
+
 		// Запускаем сервер метрик
 		if cfg.Monitoring.EnablePrometheus {
 			go func() {
@@ -53,7 +53,7 @@ func main() {
 				}
 			}()
 		}
-		
+
 		// Запускаем health check сервер
 		go func() {
 			port := fmt.Sprintf("%d", cfg.Monitoring.HealthCheckPort)
@@ -66,7 +66,7 @@ func main() {
 
 	// Инициализируем graceful shutdown
 	shutdownManager := shutdown.NewPriorityManager(log, cfg.Server.ShutdownTimeout)
-	
+
 	// Создаем контекст с отменой
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -120,7 +120,7 @@ func main() {
 
 	// Ожидаем сигнал завершения
 	shutdownManager.Wait()
-	
+
 	log.WithField("total_uptime", time.Since(startTime)).Info("Lovifyy Bot shutdown completed")
 }
 
@@ -131,20 +131,4 @@ func getEnvironment() string {
 		return "development"
 	}
 	return env
-}
-
-// printBanner выводит баннер приложения
-func printBanner() {
-	banner := `
-╔══════════════════════════════════════════════════════════════╗
-║                        Lovifyy Bot v%s                        ║
-║                                                              ║
-║           Professional Relationship Counseling Bot          ║
-║                    with OpenAI GPT-4o-mini                  ║
-║                                                              ║
-║  🤖 AI-Powered Counseling  📔 Diary System  🧠 Exercises   ║
-║  📢 Smart Notifications   👑 Admin Panel   📊 Monitoring    ║
-╚══════════════════════════════════════════════════════════════╝
-`
-	fmt.Printf(banner, version)
 }
