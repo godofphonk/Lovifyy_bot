@@ -58,11 +58,11 @@ func (ch *CommandHandler) HandleStart(update tgbotapi.Update) error {
 	// Создаем клавиатуру
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("💬 Чат с ИИ", "mode_chat"),
-			tgbotapi.NewInlineKeyboardButtonData("📔 Дневник", "mode_diary"),
+			tgbotapi.NewInlineKeyboardButtonData("💒 Задать вопрос о отношениях", "mode_chat"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🧠 Упражнения", "exercises"),
+			tgbotapi.NewInlineKeyboardButtonData("👩🏼‍❤️‍👨🏻 Упражнение недели", "exercises"),
+			tgbotapi.NewInlineKeyboardButtonData("💌 Мини-дневник", "mode_diary"),
 		),
 	)
 	
@@ -194,8 +194,8 @@ func (ch *CommandHandler) showNotificationPanel(userID int64) error {
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📔 Дневник", "notify_diary"),
-			tgbotapi.NewInlineKeyboardButtonData("🧠 Упражнения", "notify_exercise"),
+			tgbotapi.NewInlineKeyboardButtonData("💌 Мини-дневник", "notify_diary"),
+			tgbotapi.NewInlineKeyboardButtonData("👩🏼‍❤️‍👨🏻 Упражнения", "notify_exercise"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("💪 Мотивация", "notify_motivation"),

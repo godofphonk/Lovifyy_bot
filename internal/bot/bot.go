@@ -327,8 +327,16 @@ func (b *EnterpriseBot) handleCallbackQuery(update tgbotapi.Update) error {
 		return b.handleDiaryMode(userID)
 	case data == "exercises":
 		return b.handleExercises(userID)
+	case data == "admin_panel":
+		return b.commandHandler.HandleAdminPanel(update)
+	case strings.HasPrefix(data, "admin_"):
+		return b.commandHandler.HandleCallback(update)
 	case strings.HasPrefix(data, "notify_"):
-		return b.handleNotificationCallback(userID, data)
+		return b.commandHandler.HandleCallback(update)
+	case strings.HasPrefix(data, "week_"):
+		return b.commandHandler.HandleCallback(update)
+	case data == "main_menu":
+		return b.suggestMode(userID)
 	default:
 		b.logger.WithField("callback_data", data).Warn("Unknown callback query")
 		return nil
@@ -507,7 +515,41 @@ func (b *EnterpriseBot) handleDiaryMode(userID int64) error {
 
 // handleExercises показывает упражнения
 func (b *EnterpriseBot) handleExercises(userID int64) error {
-	msg := tgbotapi.NewMessage(userID, "🧠 Упражнения в разработке")
+	// Получаем список активных недель
+	activeWeeks := []int{}
+	for week := 1; week <= 10; week++ {
+		exercise, err := b.exerciseManager.GetWeekExercise(week)
+		if err == nil && exercise.IsActive {
+			activeWeeks = append(activeWeeks, week)
+		}
+	}
+	
+	if len(activeWeeks) == 0 {
+		msg := tgbotapi.NewMessage(userID, "📚 Пока нет доступных упражнений. Администратор скоро добавит новые недели!")
+		_, err := b.telegram.Send(msg)
+		return err
+	}
+	
+	// Создаем клавиатуру с активными неделями
+	var rows [][]tgbotapi.InlineKeyboardButton
+	for _, week := range activeWeeks {
+		exercise, _ := b.exerciseManager.GetWeekExercise(week)
+		buttonText := fmt.Sprintf("📅 Неделя %d: %s", week, exercise.Title)
+		button := tgbotapi.NewInlineKeyboardButtonData(buttonText, fmt.Sprintf("week_%d", week))
+		rows = append(rows, []tgbotapi.InlineKeyboardButton{button})
+	}
+	
+	// Добавляем кнопку "Назад"
+	backButton := tgbotapi.NewInlineKeyboardButtonData("🔙 Главное меню", "main_menu")
+	rows = append(rows, []tgbotapi.InlineKeyboardButton{backButton})
+	
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
+	
+	text := "👩🏼‍❤️‍👨🏻 <b>Упражнения для пар</b>\n\nВыберите неделю для изучения упражнений:"
+	msg := tgbotapi.NewMessage(userID, text)
+	msg.ParseMode = "HTML"
+	msg.ReplyMarkup = keyboard
+	
 	_, err := b.telegram.Send(msg)
 	return err
 }
@@ -538,8 +580,11 @@ func (b *EnterpriseBot) handleMetricsCommand(update tgbotapi.Update) error {
 func (b *EnterpriseBot) suggestMode(userID int64) error {
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("💬 Чат с ИИ", "mode_chat"),
-			tgbotapi.NewInlineKeyboardButtonData("📔 Дневник", "mode_diary"),
+			tgbotapi.NewInlineKeyboardButtonData("💒 Задать вопрос о отношениях", "mode_chat"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("👩🏼‍❤️‍👨🏻 Упражнение недели", "exercises"),
+			tgbotapi.NewInlineKeyboardButtonData("💌 Мини-дневник", "mode_diary"),
 		),
 	)
 	
