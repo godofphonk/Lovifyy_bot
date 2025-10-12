@@ -15,7 +15,6 @@ services:
       - ENABLE_PROMETHEUS=true
     volumes:
       - ./data:/app/data
-      - ./exercises:/app/exercises
     restart: unless-stopped
     network_mode: host
     

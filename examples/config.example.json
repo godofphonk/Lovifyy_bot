@@ -27,7 +27,7 @@
     "data_dir": "data",
     "chats_dir": "data/chats",
     "diaries_dir": "data/diaries",
-    "exercises_dir": "exercises",
+    "exercises_dir": "data/exercises",
     "logs_dir": "data/logs",
     "notifications_dir": "data/notifications",
     "backup_enabled": true,

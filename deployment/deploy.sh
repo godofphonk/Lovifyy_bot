@@ -44,7 +44,7 @@ ssh ${SERVER_USER}@${SERVER_HOST} << 'EOF'
     rm ~/lovifyy_bot.tar.gz
     
     # Создаем необходимые директории
-    mkdir -p chat_history diary_entries exercises
+    mkdir -p data/chats data/diaries data/exercises data/logs data/notifications data/backups
     
     # Устанавливаем права доступа
     chmod +x deploy.sh

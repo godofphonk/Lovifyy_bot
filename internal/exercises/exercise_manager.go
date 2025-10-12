@@ -27,7 +27,7 @@ type Manager struct {
 
 // NewManager создает новый менеджер упражнений
 func NewManager() *Manager {
-	exercisesDir := "exercises"
+	exercisesDir := "data/exercises"
 	os.MkdirAll(exercisesDir, 0755)
 	return &Manager{exercisesDir: exercisesDir}
 }

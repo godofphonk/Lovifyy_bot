@@ -133,7 +133,7 @@ func getDefaultConfig() *Config {
 			DataDir:         "data",
 			ChatsDir:        "data/chats",
 			DiariesDir:      "data/diaries",
-			ExercisesDir:    "exercises",
+			ExercisesDir:    "data/exercises",
 			LogsDir:         "data/logs",
 			NotificationsDir: "data/notifications",
 			BackupEnabled:   true,

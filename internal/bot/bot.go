@@ -481,11 +481,70 @@ func (b *EnterpriseBot) startMetricsCollection() {
 	}
 }
 
-// Заглушки для остальных методов
-func (b *EnterpriseBot) handleDiaryMessage(userID int64, messageText string) error { return nil }
-func (b *EnterpriseBot) handleChatMode(userID int64) error { return nil }
-func (b *EnterpriseBot) handleDiaryMode(userID int64) error { return nil }
-func (b *EnterpriseBot) handleExercises(userID int64) error { return nil }
-func (b *EnterpriseBot) handleNotificationCallback(userID int64, data string) error { return nil }
-func (b *EnterpriseBot) handleMetricsCommand(update tgbotapi.Update) error { return nil }
-func (b *EnterpriseBot) suggestMode(userID int64) error { return nil }
+// handleDiaryMessage обрабатывает сообщения в режиме дневника
+func (b *EnterpriseBot) handleDiaryMessage(userID int64, messageText string) error {
+	// TODO: Implement diary message handling
+	msg := tgbotapi.NewMessage(userID, "📔 Функция дневника в разработке")
+	_, err := b.telegram.Send(msg)
+	return err
+}
+
+// handleChatMode переключает в режим чата
+func (b *EnterpriseBot) handleChatMode(userID int64) error {
+	b.userManager.SetState(userID, "chat")
+	msg := tgbotapi.NewMessage(userID, "💬 Режим чата активирован! Можете задавать вопросы.")
+	_, err := b.telegram.Send(msg)
+	return err
+}
+
+// handleDiaryMode переключает в режим дневника
+func (b *EnterpriseBot) handleDiaryMode(userID int64) error {
+	b.userManager.SetState(userID, "diary")
+	msg := tgbotapi.NewMessage(userID, "📔 Режим дневника активирован! Пишите свои мысли.")
+	_, err := b.telegram.Send(msg)
+	return err
+}
+
+// handleExercises показывает упражнения
+func (b *EnterpriseBot) handleExercises(userID int64) error {
+	msg := tgbotapi.NewMessage(userID, "🧠 Упражнения в разработке")
+	_, err := b.telegram.Send(msg)
+	return err
+}
+
+// handleNotificationCallback обрабатывает callback уведомлений
+func (b *EnterpriseBot) handleNotificationCallback(userID int64, data string) error {
+	msg := tgbotapi.NewMessage(userID, "📢 Уведомления в разработке")
+	_, err := b.telegram.Send(msg)
+	return err
+}
+
+// handleMetricsCommand показывает метрики (только для админов)
+func (b *EnterpriseBot) handleMetricsCommand(update tgbotapi.Update) error {
+	userID := update.Message.From.ID
+	
+	if !b.userManager.IsAdmin(userID) {
+		msg := tgbotapi.NewMessage(userID, "❌ Доступ запрещен")
+		_, err := b.telegram.Send(msg)
+		return err
+	}
+	
+	msg := tgbotapi.NewMessage(userID, "📊 Метрики доступны по адресу: http://localhost:9090/metrics")
+	_, err := b.telegram.Send(msg)
+	return err
+}
+
+// suggestMode предлагает выбрать режим
+func (b *EnterpriseBot) suggestMode(userID int64) error {
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💬 Чат с ИИ", "mode_chat"),
+			tgbotapi.NewInlineKeyboardButtonData("📔 Дневник", "mode_diary"),
+		),
+	)
+	
+	msg := tgbotapi.NewMessage(userID, "Выберите режим работы:")
+	msg.ReplyMarkup = keyboard
+	_, err := b.telegram.Send(msg)
+	return err
+}

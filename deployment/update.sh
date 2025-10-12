@@ -19,7 +19,7 @@ tar --exclude='.git' \
     --exclude='.env.server' \
     --exclude='.env.local' \
     -czf ${PROJECT_NAME}_update.tar.gz \
-    internal/ cmd/ exercises/ *.go go.mod go.sum Dockerfile docker-compose.yml .env
+    internal/ cmd/ data/ *.go go.mod go.sum Dockerfile docker-compose.yml .env
 
 # 2. Копируем и применяем обновление
 echo "📤 Применяем обновление на сервере..."

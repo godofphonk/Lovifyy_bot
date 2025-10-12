@@ -82,7 +82,7 @@ docker-build: ## Build Docker image
 
 docker-run: ## Run Docker container
 	@echo "🐳 Running Docker container..."
-	docker run --rm --env-file .env -v $(PWD)/data:/app/data -v $(PWD)/exercises:/app/exercises ${DOCKER_IMAGE}:latest
+	docker run --rm --env-file .env -v $(PWD)/data:/app/data ${DOCKER_IMAGE}:latest
 
 docker-compose-up: ## Start with docker-compose
 	@echo "🐳 Starting with docker-compose..."
@@ -122,7 +122,7 @@ setup: deps install-tools ## Setup development environment
 	@echo "⚙️ Setting up development environment..."
 	cp examples/config.example.json config.json
 	cp examples/.env.example .env
-	mkdir -p data/logs data/chats data/diaries data/backups data/notifications exercises
+	mkdir -p data/logs data/chats data/diaries data/backups data/notifications data/exercises
 	@echo "✅ Development environment setup complete!"
 	@echo "📝 Don't forget to edit .env and config.json with your tokens!"
 
@@ -130,7 +130,7 @@ setup: deps install-tools ## Setup development environment
 backup: ## Create backup
 	@echo "💾 Creating backup..."
 	mkdir -p data/backups
-	tar -czf data/backups/backup-$(shell date +%Y%m%d-%H%M%S).tar.gz data/ exercises/
+	tar -czf data/backups/backup-$(shell date +%Y%m%d-%H%M%S).tar.gz data/
 
 restore: ## Restore from backup (specify BACKUP_FILE)
 	@echo "📥 Restoring from backup..."
