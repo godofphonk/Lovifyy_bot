@@ -113,8 +113,8 @@ func NewMetrics() *Metrics {
 		),
 	}
 	
-	// Регистрируем метрики
-	prometheus.MustRegister(
+	// Регистрируем метрики (с проверкой на дублирование)
+	metrics := []prometheus.Collector{
 		m.MessagesTotal,
 		m.CommandsTotal,
 		m.ErrorsTotal,
@@ -125,7 +125,16 @@ func NewMetrics() *Metrics {
 		m.ConnectedUsers,
 		m.SystemMemory,
 		m.MessageLength,
-	)
+	}
+	
+	for _, metric := range metrics {
+		if err := prometheus.Register(metric); err != nil {
+			// Игнорируем ошибки дублирования
+			if _, ok := err.(prometheus.AlreadyRegisteredError); !ok {
+				panic(err)
+			}
+		}
+	}
 	
 	return m
 }

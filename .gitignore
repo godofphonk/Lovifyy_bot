@@ -1,3 +1,6 @@
+# Private files and server configs
+private/
+
 # Binaries for programs and plugins
 *.exe
 *.exe~

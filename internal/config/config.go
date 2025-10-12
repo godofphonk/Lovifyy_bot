@@ -211,6 +211,13 @@ func loadFromEnv(config *Config) {
 			config.Server.Port = p
 		}
 	}
+	
+	// Monitoring
+	if enablePrometheus := os.Getenv("ENABLE_PROMETHEUS"); enablePrometheus != "" {
+		if enable, err := strconv.ParseBool(enablePrometheus); err == nil {
+			config.Monitoring.EnablePrometheus = enable
+		}
+	}
 }
 
 // parseAdminIDs парсит список ID администраторов
