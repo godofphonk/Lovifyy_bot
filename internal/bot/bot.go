@@ -1,10 +1,11 @@
 package bot
 
 import (
-	"context"
-	"fmt"
-	"strings"
-	"time"
+    "context"
+    "fmt"
+    "strconv"
+    "strings"
+    "time"
 
 	"Lovifyy_bot/internal/ai"
 	"Lovifyy_bot/internal/config"
@@ -99,9 +100,8 @@ func NewEnterpriseBot(cfg *config.Config, log *logger.Logger) (*EnterpriseBot, e
 	notificationService := services.NewNotificationService(telegram, aiClient)
 
 	// Инициализируем обработчики
-	commandHandler := handlers.NewCommandHandler(telegram, userManager, notificationService)
+	commandHandler := handlers.NewCommandHandler(telegram, userManager, exerciseManager, notificationService)
 
-	// Инициализируем middleware
 	rateLimitMiddleware := middleware.NewRateLimitMiddleware(userManager, cfg.Security.RateLimitDuration)
 
 	// Создаем контекст
@@ -129,6 +129,11 @@ func NewEnterpriseBot(cfg *config.Config, log *logger.Logger) (*EnterpriseBot, e
 		"ai_enabled":      aiClient != nil,
 		"metrics_enabled": metricsInstance != nil,
 	}).Info("Enterprise bot initialized successfully")
+
+	// Запускаем планировщик уведомлений (фоново)
+	if bot.notificationService != nil {
+		go bot.notificationService.StartScheduler(bot.ctx.Done())
+	}
 
 	return bot, nil
 }
@@ -297,6 +302,8 @@ func (b *EnterpriseBot) handleCommand(update tgbotapi.Update) error {
 		return b.commandHandler.HandleNotify(update)
 	case "setweek":
 		return b.commandHandler.HandleSetWeek(update)
+	case "adminhelp":
+		return b.commandHandler.HandleAdminHelp(update)
 	case "metrics":
 		return b.handleMetricsCommand(update)
 	default:
@@ -319,16 +326,37 @@ func (b *EnterpriseBot) handleCallbackQuery(update tgbotapi.Update) error {
 		"callback_data": data,
 	}).Info("Processing callback query")
 
-	// Роутинг callback queries
-	switch {
-	case data == "mode_chat":
-		return b.handleChatMode(userID)
-	case data == "mode_diary":
-		return b.handleDiaryMode(userID)
-	case data == "exercises":
-		return b.handleExercises(userID)
+    // Роутинг callback queries
+    switch {
+    case data == "mode_chat":
+        return b.handleChatMode(userID)
+    case data == "mode_diary":
+        return b.handleDiaryMode(userID)
+    case data == "exercises":
+        // Делегируем показ недель в CommandHandler (как в legacy логике меню)
+        return b.commandHandler.HandleCallback(update)
+    case data == "exercise_week_1":
+        return b.handleExerciseWeekCallback(userID, 1)
+    case data == "exercise_week_2":
+        return b.handleExerciseWeekCallback(userID, 2)
+    case data == "exercise_week_3":
+        return b.handleExerciseWeekCallback(userID, 3)
+    case data == "exercise_week_4":
+        return b.handleExerciseWeekCallback(userID, 4)
 	case data == "admin_panel":
 		return b.commandHandler.HandleAdminPanel(update)
+	case strings.HasPrefix(data, "admin_week_"):
+		// admin_week_<week>_<field>
+		parts := strings.Split(data, "_")
+		if len(parts) >= 4 {
+			weekStr := parts[2]
+			weekNum, err := strconv.Atoi(weekStr)
+			if err == nil && weekNum >= 1 && weekNum <= 4 {
+				field := strings.Join(parts[3:], "_")
+				return b.handleAdminWeekFieldCallback(userID, weekNum, field)
+			}
+		}
+		return nil
 	case strings.HasPrefix(data, "admin_"):
 		return b.commandHandler.HandleCallback(update)
 	case strings.HasPrefix(data, "notify_"):
@@ -342,7 +370,6 @@ func (b *EnterpriseBot) handleCallbackQuery(update tgbotapi.Update) error {
 		return nil
 	}
 }
-
 // handleMessage обрабатывает обычные сообщения с валидацией
 func (b *EnterpriseBot) handleMessage(update tgbotapi.Update) error {
 	userID := update.Message.From.ID
@@ -507,51 +534,16 @@ func (b *EnterpriseBot) handleChatMode(userID int64) error {
 
 // handleDiaryMode переключает в режим дневника
 func (b *EnterpriseBot) handleDiaryMode(userID int64) error {
-	b.userManager.SetState(userID, "diary")
-	msg := tgbotapi.NewMessage(userID, "📔 Режим дневника активирован! Пишите свои мысли.")
-	_, err := b.telegram.Send(msg)
-	return err
+    b.userManager.SetState(userID, "diary")
+    msg := tgbotapi.NewMessage(userID, "📔 Режим дневника активирован! Пишите свои мысли.")
+    _, err := b.telegram.Send(msg)
+    return err
 }
 
-// handleExercises показывает упражнения
+// handleExercises больше не используется: показ «Упражнений» делегирован в CommandHandler
 func (b *EnterpriseBot) handleExercises(userID int64) error {
-	// Получаем список активных недель
-	activeWeeks := []int{}
-	for week := 1; week <= 10; week++ {
-		exercise, err := b.exerciseManager.GetWeekExercise(week)
-		if err == nil && exercise.IsActive {
-			activeWeeks = append(activeWeeks, week)
-		}
-	}
-	
-	if len(activeWeeks) == 0 {
-		msg := tgbotapi.NewMessage(userID, "📚 Пока нет доступных упражнений. Администратор скоро добавит новые недели!")
-		_, err := b.telegram.Send(msg)
-		return err
-	}
-	
-	// Создаем клавиатуру с активными неделями
-	var rows [][]tgbotapi.InlineKeyboardButton
-	for _, week := range activeWeeks {
-		exercise, _ := b.exerciseManager.GetWeekExercise(week)
-		buttonText := fmt.Sprintf("📅 Неделя %d: %s", week, exercise.Title)
-		button := tgbotapi.NewInlineKeyboardButtonData(buttonText, fmt.Sprintf("week_%d", week))
-		rows = append(rows, []tgbotapi.InlineKeyboardButton{button})
-	}
-	
-	// Добавляем кнопку "Назад"
-	backButton := tgbotapi.NewInlineKeyboardButtonData("🔙 Главное меню", "main_menu")
-	rows = append(rows, []tgbotapi.InlineKeyboardButton{backButton})
-	
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
-	
-	text := "👩🏼‍❤️‍👨🏻 <b>Упражнения для пар</b>\n\nВыберите неделю для изучения упражнений:"
-	msg := tgbotapi.NewMessage(userID, text)
-	msg.ParseMode = "HTML"
-	msg.ReplyMarkup = keyboard
-	
-	_, err := b.telegram.Send(msg)
-	return err
+    // На всякий случай, предложим выбрать режим
+    return b.suggestMode(userID)
 }
 
 // handleNotificationCallback обрабатывает callback уведомлений

@@ -232,8 +232,22 @@ func (v *Validator) isSpam(message string) bool {
 // hasExcessiveRepetition проверяет на чрезмерное повторение
 func (v *Validator) hasExcessiveRepetition(message string) bool {
 	// Проверяем повторение одного символа более 10 раз подряд
-	pattern := regexp.MustCompile(`(.)\1{10,}`)
-	return pattern.MatchString(message)
+	// Простая проверка без регекса
+	if len(message) < 10 {
+		return false
+	}
+	
+	for i := 0; i < len(message)-10; i++ {
+		char := message[i]
+		count := 1
+		for j := i + 1; j < len(message) && message[j] == char; j++ {
+			count++
+			if count > 10 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // hasExcessiveCaps проверяет на чрезмерное использование заглавных букв

@@ -140,3 +140,9 @@ func (um *UserManager) ClearState(userID int64) {
 func (um *UserManager) GetAdminIDs() []int64 {
 	return um.adminIDs
 }
+
+// GetUsername возвращает имя пользователя (заглушка)
+func (um *UserManager) GetUsername(userID int64) string {
+	// Пока возвращаем пустое значение, можно добавить логику позже
+	return ""
+}
