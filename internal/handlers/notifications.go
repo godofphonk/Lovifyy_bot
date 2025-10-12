@@ -109,19 +109,70 @@ func (ch *CommandHandler) showScheduledNotifications(userID int64) error {
 	if len(items) == 0 {
 		return ch.simpleMsg(userID, "📋 Запланированных уведомлений нет.")
 	}
+	
 	text := "📋 Запланированные уведомления:\n\n"
 	var rows [][]tgbotapi.InlineKeyboardButton
-	for _, it := range items {
-		text += fmt.Sprintf("• %s — %s (%s)\n", it.ID, it.SendAt.Format("02.01 15:04"), string(it.Type))
+	
+	// Часовой пояс UTC+5 для отображения
+	utc5 := time.FixedZone("UTC+5", 5*60*60)
+	
+	for i, it := range items {
+		// Конвертируем время в UTC+5 для отображения
+		localTime := it.SendAt.In(utc5)
+		
+		// Определяем тип уведомления
+		var typeEmoji, typeName string
+		switch string(it.Type) {
+		case "diary":
+			typeEmoji = "💌"
+			typeName = "Мини-дневник"
+		case "exercise":
+			typeEmoji = "👩🏼‍❤️‍👨🏻"
+			typeName = "Упражнение недели"
+		case "motivation":
+			typeEmoji = "💒"
+			typeName = "Мотивация"
+		case "custom":
+			typeEmoji = "✏️"
+			typeName = "Кастомное"
+		default:
+			typeEmoji = "📢"
+			typeName = string(it.Type)
+		}
+		
+		// Заголовок уведомления
+		text += fmt.Sprintf("🔹 **Уведомление #%d**\n", i+1)
+		text += fmt.Sprintf("📅 **Дата:** %s\n", localTime.Format("02.01.2006 15:04"))
+		text += fmt.Sprintf("📢 **Тип:** %s %s\n", typeEmoji, typeName)
+		
+		// Показываем текст уведомления
+		var messageText string
+		if it.CustomText != "" {
+			// Для кастомных уведомлений показываем кастомный текст
+			messageText = it.CustomText
+		} else if it.Message != "" {
+			// Для стандартных уведомлений показываем сгенерированное сообщение
+			messageText = it.Message
+		} else {
+			messageText = "Текст будет сгенерирован при отправке"
+		}
+		
+		text += fmt.Sprintf("💬 **Текст:** %s\n", messageText)
+		text += fmt.Sprintf("🆔 **ID:** `%s`\n\n", it.ID)
+		
+		// Кнопка отмены
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отменить "+it.ID, "notify_cancel_"+it.ID),
+			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("❌ Отменить #%d", i+1), "notify_cancel_"+it.ID),
 		))
 	}
+	
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", "admin_notifications"),
+		tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", "notifications_menu"),
 	))
+	
 	kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
 	msg := tgbotapi.NewMessage(userID, text)
+	msg.ParseMode = "Markdown"
 	msg.ReplyMarkup = kb
 	_, err = ch.bot.Send(msg)
 	return err
