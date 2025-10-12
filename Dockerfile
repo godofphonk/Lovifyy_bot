@@ -34,8 +34,11 @@ WORKDIR /app
 # Копируем бинарный файл из builder
 COPY --from=builder /app/main .
 
-# Создаем директории для данных
-RUN mkdir -p data/chats data/diaries data/exercises data/logs data/notifications data/backups && chown -R appuser:appuser /app
+# Копируем папку data с существующими файлами
+COPY --from=builder /app/data ./data
+
+# Создаем недостающие директории для данных
+RUN mkdir -p data/chats data/diaries data/logs data/notifications data/backups && chown -R appuser:appuser /app
 
 # Переключаемся на непривилегированного пользователя
 USER appuser
