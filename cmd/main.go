@@ -1,61 +1,150 @@
 package main
 
 import (
-	"log"
+	"context"
+	"fmt"
 	"os"
-	"strconv"
-	"strings"
+	"time"
 
 	"Lovifyy_bot/internal/bot"
-	"github.com/joho/godotenv"
+	"Lovifyy_bot/internal/config"
+	"Lovifyy_bot/internal/logger"
+	"Lovifyy_bot/internal/metrics"
+	"Lovifyy_bot/internal/shutdown"
+)
+
+var (
+	version   = "2.0.0"
+	buildTime = "unknown"
+	gitCommit = "unknown"
 )
 
 func main() {
-	// Загружаем переменные окружения
-	err := godotenv.Load(".env")
+	startTime := time.Now()
+	
+	// Загружаем конфигурацию
+	cfg, err := config.LoadConfig()
 	if err != nil {
-		// Пробуем альтернативные пути
-		err2 := godotenv.Load("/app/.env")
-		if err2 != nil {
-			log.Println("Файл .env не найден, используем системные переменные окружения")
+		fmt.Printf("❌ Failed to load configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Инициализируем логгер
+	log := logger.NewLogger(cfg.Logger)
+	log.WithFields(map[string]interface{}{
+		"version":    version,
+		"build_time": buildTime,
+		"git_commit": gitCommit,
+	}).Info("Starting Lovifyy Bot")
+
+	// Инициализируем метрики
+	var metricsInstance *metrics.Metrics
+	if cfg.Monitoring.Enabled {
+		metricsInstance = metrics.NewMetrics()
+		log.Info("Metrics system initialized")
+		
+		// Запускаем сервер метрик
+		if cfg.Monitoring.EnablePrometheus {
+			go func() {
+				port := fmt.Sprintf("%d", cfg.Server.MetricsPort)
+				log.WithField("port", port).Info("Starting metrics server")
+				if err := metricsInstance.StartMetricsServer(port); err != nil {
+					log.WithError(err).Error("Failed to start metrics server")
+				}
+			}()
 		}
-	}
-
-	// Получаем токен бота
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if botToken == "" {
-		log.Fatal("TELEGRAM_BOT_TOKEN не установлен")
-	}
-
-	// Получаем системный промпт
-	systemPrompt := os.Getenv("SYSTEM_PROMPT")
-	if systemPrompt == "" {
-		systemPrompt = "Ты - профессиональный консультант по отношениям и семейный психолог с многолетним опытом работы. Твоя задача - помогать парам и людям в отношениях, давать мудрые советы, поддерживать и направлять к здоровым отношениям. Отвечай на русском языке, будь эмпатичным, понимающим и профессиональным. Твои ответы должны быть практичными и основанными на психологических принципах. ВАЖНО: Ты помнишь всю историю нашего разговора и можешь ссылаться на предыдущие сообщения пользователя."
-		log.Println("⚠️ SYSTEM_PROMPT не установлен, используется промпт по умолчанию")
-	}
-
-	// Получаем список админов
-	adminIDsStr := os.Getenv("ADMIN_IDS")
-	var adminIDs []int64
-	if adminIDsStr != "" {
-		adminIDsList := strings.Split(adminIDsStr, ",")
-		for _, idStr := range adminIDsList {
-			idStr = strings.TrimSpace(idStr)
-			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
-				adminIDs = append(adminIDs, id)
+		
+		// Запускаем health check сервер
+		go func() {
+			port := fmt.Sprintf("%d", cfg.Monitoring.HealthCheckPort)
+			log.WithField("port", port).Info("Starting health check server")
+			if err := metrics.StartHealthServer(port, startTime); err != nil {
+				log.WithError(err).Error("Failed to start health check server")
 			}
-		}
+		}()
 	}
-	log.Printf("👑 Загружено %d администраторов", len(adminIDs))
 
-	// Создаем и запускаем бота
-	telegramBot := bot.NewBot(botToken, systemPrompt, adminIDs)
-	log.Println("🚀 Lovifyy Bot запущен...")
-	log.Println("💾 История сохраняется для каждого пользователя")
-	log.Println("🤖 Используется OpenAI модель: GPT-4o-mini")
+	// Инициализируем graceful shutdown
+	shutdownManager := shutdown.NewPriorityManager(log, cfg.Server.ShutdownTimeout)
 	
-	// Запускаем планировщик уведомлений
-	go telegramBot.StartNotificationScheduler()
+	// Создаем контекст с отменой
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Создаем бота
+	telegramBot, err := bot.NewEnterpriseBot(cfg, log)
+	if err != nil {
+		log.WithError(err).Error("Failed to initialize enterprise bot")
+		os.Exit(1)
+	}
+
+	// Регистрируем shutdown hooks
+	shutdownManager.AddHook("telegram_bot", 100, func() error {
+		log.Info("Shutting down Telegram bot")
+		return telegramBot.Stop()
+	})
+
+	if metricsInstance != nil {
+		shutdownManager.AddHook("metrics", 50, func() error {
+			log.Info("Shutting down metrics system")
+			// Здесь можно добавить логику остановки метрик
+			return nil
+		})
+	}
+
+	shutdownManager.AddHook("logger", 10, func() error {
+		log.Info("Shutting down logger")
+		return nil
+	})
+
+	// Запускаем бота в горутине
+	go func() {
+		log.Info("Starting enterprise Telegram bot")
+		if err := telegramBot.Start(); err != nil {
+			log.WithError(err).Error("Bot stopped with error")
+		}
+	}()
+
+	// Логируем успешный запуск
+	log.WithFields(map[string]interface{}{
+		"startup_time": time.Since(startTime),
+		"version":      version,
+		"environment":  getEnvironment(),
+	}).Info("Lovifyy Bot started successfully")
+
+	// Обновляем метрики
+	if metricsInstance != nil {
+		metricsInstance.SetConnectedUsers(1)
+		metricsInstance.RecordMessage("startup", "success")
+	}
+
+	// Ожидаем сигнал завершения
+	shutdownManager.Wait()
 	
-	telegramBot.Start()
+	log.WithField("total_uptime", time.Since(startTime)).Info("Lovifyy Bot shutdown completed")
+}
+
+// getEnvironment определяет окружение
+func getEnvironment() string {
+	env := os.Getenv("GO_ENV")
+	if env == "" {
+		return "development"
+	}
+	return env
+}
+
+// printBanner выводит баннер приложения
+func printBanner() {
+	banner := `
+╔══════════════════════════════════════════════════════════════╗
+║                        Lovifyy Bot v%s                        ║
+║                                                              ║
+║           Professional Relationship Counseling Bot          ║
+║                    with OpenAI GPT-4o-mini                  ║
+║                                                              ║
+║  🤖 AI-Powered Counseling  📔 Diary System  🧠 Exercises   ║
+║  📢 Smart Notifications   👑 Admin Panel   📊 Monitoring    ║
+╚══════════════════════════════════════════════════════════════╝
+`
+	fmt.Printf(banner, version)
 }

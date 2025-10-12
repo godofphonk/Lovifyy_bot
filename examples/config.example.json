@@ -1,0 +1,59 @@
+{
+  "telegram": {
+    "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
+    "admin_ids": [123456789],
+    "system_prompt": "Ты - профессиональный консультант по отношениям и семейный психолог с многолетним опытом работы. Твоя задача - помогать парам и людям в отношениях, давать мудрые советы, поддерживать и направлять к здоровым отношениям. Отвечай на русском языке, будь эмпатичным, понимающим и профессиональным.",
+    "timeout": 30,
+    "retry_count": 3
+  },
+  "openai": {
+    "api_key": "YOUR_OPENAI_API_KEY",
+    "model": "gpt-4o-mini",
+    "base_url": "https://api.openai.com/v1",
+    "max_tokens": 1500,
+    "temperature": 0.7,
+    "timeout": 30
+  },
+  "logger": {
+    "level": "info",
+    "format": "text",
+    "output": "stdout",
+    "filename": "logs/lovifyy_bot.log",
+    "max_size": 10,
+    "max_backups": 5,
+    "max_age": 30
+  },
+  "database": {
+    "data_dir": "data",
+    "chats_dir": "data/chats",
+    "diaries_dir": "data/diaries",
+    "exercises_dir": "exercises",
+    "logs_dir": "data/logs",
+    "notifications_dir": "data/notifications",
+    "backup_enabled": true,
+    "backup_dir": "data/backups"
+  },
+  "server": {
+    "port": 8080,
+    "read_timeout": "10s",
+    "write_timeout": "10s",
+    "shutdown_timeout": "30s",
+    "enable_metrics": true,
+    "metrics_port": 9090
+  },
+  "security": {
+    "rate_limit_duration": "3s",
+    "max_message_length": 4000,
+    "enable_sanitization": true,
+    "allowed_commands": [
+      "start", "help", "menu", "admin", "notify", "setweek"
+    ]
+  },
+  "monitoring": {
+    "enabled": true,
+    "metrics_interval": "30s",
+    "health_check_port": 8081,
+    "alert_webhook_url": "",
+    "enable_prometheus": false
+  }
+}

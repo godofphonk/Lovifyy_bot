@@ -17,8 +17,30 @@
 # Go workspace file
 go.work
 
-# Environment variables
+# Environment variables (NEVER COMMIT THESE!)
 .env
+.env.*
+config.json
+*.key
+*.pem
+*credentials*
+*secret*
+*token*
+
+# Build artifacts
+build/
+lovifyy_bot
+
+# Data directories (runtime data)
+data/chats/
+data/diaries/
+data/logs/
+data/backups/
+data/notifications/
+
+# Private server files
+private/.env.server
+private/server_credentials.*
 
 # IDE files
 .idea/
@@ -35,3 +57,7 @@ go.work
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

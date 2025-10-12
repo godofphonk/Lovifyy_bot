@@ -2,18 +2,27 @@ package tests
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"Lovifyy_bot/internal/ai"
 )
 
-func TestResponseCleaning(t *testing.T) {
-	fmt.Println("🧪 Тестируем очистку ответов от <think> блоков...")
+func TestOpenAIClient(t *testing.T) {
+	fmt.Println("🧪 Тестируем OpenAI клиент...")
 	
-	client := ai.NewOllamaClient("gemma3:1b")
+	// Проверяем наличие API ключа
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		t.Skip("OPENAI_API_KEY не установлен, пропускаем тест")
+		return
+	}
+	
+	client := ai.NewOpenAIClient("gpt-4o-mini")
 	
 	// Проверяем подключение
 	if err := client.TestConnection(); err != nil {
-		fmt.Printf("❌ Ошибка: %v\n", err)
+		t.Logf("❌ Ошибка подключения к OpenAI: %v", err)
+		t.Skip("OpenAI недоступен, пропускаем тест")
 		return
 	}
 	
@@ -21,16 +30,16 @@ func TestResponseCleaning(t *testing.T) {
 	fmt.Println("\n🤖 Тестируем простой вопрос...")
 	response, err := client.Generate("Скажи просто 'Привет!' без лишних слов")
 	if err != nil {
-		t.Errorf("❌ Ошибка: %v", err)
+		t.Errorf("❌ Ошибка генерации: %v", err)
 		return
 	}
 	
-	fmt.Printf("✅ Очищенный ответ: '%s'\n", response)
+	fmt.Printf("✅ Ответ OpenAI: '%s'\n", response)
 	
-	// Проверяем что <think> блоки удалены
-	if len(response) < 200 && response != "" {
-		fmt.Println("✅ Ответ выглядит чистым!")
+	// Проверяем что ответ не пустой
+	if response == "" {
+		t.Error("❌ Получен пустой ответ")
 	} else {
-		t.Errorf("⚠️ Ответ все еще содержит лишний текст: длина %d", len(response))
+		fmt.Println("✅ OpenAI клиент работает корректно!")
 	}
 }

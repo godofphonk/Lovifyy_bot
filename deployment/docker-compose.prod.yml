@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  lovifyy_bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: lovifyy_bot_prod
+    restart: unless-stopped
+    
+    # Environment variables for production
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ADMIN_IDS=${ADMIN_IDS}
+      - SYSTEM_PROMPT=${SYSTEM_PROMPT}
+      - GO_ENV=production
+      
+    # Production volumes with proper permissions
+    volumes:
+      - ./chat_history:/app/chat_history:rw
+      - ./diary_entries:/app/diary_entries:rw
+      - ./exercises:/app/exercises:rw
+      - ./.env:/app/.env:ro
+      
+    # Health check for production monitoring
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+          cpus: '0.25'
+          
+    # Security settings
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m
+      
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        
+    # Network configuration
+    networks:
+      - lovifyy_network
+
+networks:
+  lovifyy_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Production-specific configurations
+x-production-settings:
+  # Backup configuration
+  backup:
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    retention: 7  # Keep 7 days of backups
+    
+  # Monitoring
+  monitoring:
+    health_check_interval: "5m"
+    log_level: "info"
+    metrics_enabled: true
+    
+  # Security
+  security:
+    api_rate_limit: 100  # requests per minute
+    max_users_per_day: 1000
+    data_encryption: true

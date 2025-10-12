@@ -60,7 +60,7 @@ type OpenAIResponse struct {
 func NewOpenAIClient(model string) *OpenAIClient {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		panic("OPENAI_API_KEY не установлен в переменных окружения")
+		return nil // Возвращаем nil вместо panic
 	}
 
 	return &OpenAIClient{

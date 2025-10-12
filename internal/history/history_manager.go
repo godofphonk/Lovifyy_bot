@@ -41,8 +41,8 @@ type Manager struct {
 
 // NewManager создает новый менеджер истории
 func NewManager() *Manager {
-	historyDir := "chat_history"
-	diaryDir := "diary_entries"
+	historyDir := "data/chats"
+	diaryDir := "data/diaries"
 	os.MkdirAll(historyDir, 0755)
 	os.MkdirAll(diaryDir, 0755)
 	return &Manager{

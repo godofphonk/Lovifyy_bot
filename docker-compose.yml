@@ -11,7 +11,24 @@ services:
       - ADMIN_IDS=${ADMIN_IDS}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
-      - ./chat_history:/app/chat_history
-      - ./diary_entries:/app/diary_entries
+      - ./data:/app/data
       - ./exercises:/app/exercises
     restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "./main"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+          cpus: '0.25'
