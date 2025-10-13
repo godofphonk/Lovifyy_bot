@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -63,6 +64,10 @@ func (b *EnterpriseBot) handleMessage(update tgbotapi.Update) error {
 	case "schedule_custom_text":
 		return b.handleScheduleCustomTextMessage(userID, sanitizedText)
 	default:
+		// Проверяем, не является ли это состоянием дневника
+		if strings.HasPrefix(state, "diary_") {
+			return b.handleDiaryMessage(userID, sanitizedText)
+		}
 		// Проверяем, не является ли это состоянием кастомного времени
 		if strings.HasPrefix(state, "custom_time_") {
 			return b.handleCustomTimeMessage(userID, sanitizedText, state)
@@ -149,8 +154,99 @@ func (b *EnterpriseBot) handleChatMessage(userID int64, messageText string) erro
 
 // handleDiaryMessage обрабатывает сообщения в режиме дневника
 func (b *EnterpriseBot) handleDiaryMessage(userID int64, messageText string) error {
-	// TODO: Implement diary message handling
-	msg := tgbotapi.NewMessage(userID, "📔 Функция дневника в разработке")
+	state := b.userManager.GetState(userID)
+	
+	// Парсим состояние: diary_<gender>_<week>_<type>
+	if strings.HasPrefix(state, "diary_") {
+		parts := strings.Split(state, "_")
+		if len(parts) >= 4 {
+			gender := parts[1]
+			week := parts[2]
+			diaryType := parts[3]
+			
+			// Конвертируем неделю в число
+			weekNum := 1
+			switch week {
+			case "1":
+				weekNum = 1
+			case "2":
+				weekNum = 2
+			case "3":
+				weekNum = 3
+			case "4":
+				weekNum = 4
+			}
+			
+			// Сохраняем запись в дневник с полной информацией
+			err := b.historyManager.SaveDiaryEntryWithGender(userID, "user", messageText, weekNum, diaryType, gender)
+			if err != nil {
+				b.logger.WithError(err).Error("Failed to save diary entry")
+				msg := tgbotapi.NewMessage(userID, "❌ Ошибка при сохранении записи")
+				_, err := b.telegram.Send(msg)
+				return err
+			}
+			
+			// Определяем эмодзи и текст для ответа
+			var genderEmoji string
+			var typeEmoji string
+			var typeText string
+			
+			if gender == "male" {
+				genderEmoji = "👨"
+			} else {
+				genderEmoji = "👩"
+			}
+			
+			switch diaryType {
+			case "personal":
+				typeEmoji = "💭"
+				typeText = "Личные мысли"
+			case "partner":
+				typeEmoji = "💕"
+				typeText = "О партнере"
+			case "relationship":
+				typeEmoji = "🌟"
+				typeText = "О отношениях"
+			case "exercises":
+				typeEmoji = "📋"
+				typeText = "Упражнения недели"
+			default:
+				typeEmoji = "📝"
+				typeText = "Запись"
+			}
+			
+			response := fmt.Sprintf("✅ Запись сохранена!\n\n"+
+				"%s %s - Неделя %s\n"+
+				"%s %s\n\n"+
+				"📝 Продолжайте писать или используйте /start для возврата в главное меню.", 
+				genderEmoji, 
+				map[string]string{"male": "Парень", "female": "Девушка"}[gender], 
+				week, typeEmoji, typeText)
+			
+			msg := tgbotapi.NewMessage(userID, response)
+			_, err = b.telegram.Send(msg)
+			return err
+		}
+	}
+	
+	// Если состояние просто "diary" (старый формат)
+	if state == "diary" {
+		// Сохраняем как общую запись
+		err := b.historyManager.SaveDiaryEntry(userID, "user", messageText, 1, "general")
+		if err != nil {
+			b.logger.WithError(err).Error("Failed to save diary entry")
+			msg := tgbotapi.NewMessage(userID, "❌ Ошибка при сохранении записи")
+			_, err := b.telegram.Send(msg)
+			return err
+		}
+		
+		msg := tgbotapi.NewMessage(userID, "📝 Записано! Продолжайте писать или используйте /start для возврата в главное меню.")
+		_, err = b.telegram.Send(msg)
+		return err
+	}
+	
+	// Неизвестное состояние дневника
+	msg := tgbotapi.NewMessage(userID, "❓ Неизвестное состояние дневника. Используйте /start для возврата в главное меню.")
 	_, err := b.telegram.Send(msg)
 	return err
 }

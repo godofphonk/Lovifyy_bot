@@ -161,6 +161,10 @@ func (ch *CommandHandler) HandleCallback(update tgbotapi.Update) error {
 		return ch.diaryHandler.HandleDiaryGender(update.CallbackQuery, "female")
 	case data == "diary_view":
 		return ch.diaryHandler.HandleDiaryView(update.CallbackQuery)
+	case strings.HasPrefix(data, "diary_week_"):
+		return ch.diaryHandler.HandleDiaryWeek(update.CallbackQuery, data)
+	case strings.HasPrefix(data, "diary_type_"):
+		return ch.diaryHandler.HandleDiaryType(update.CallbackQuery, data)
 
 	// Недели упражнений
 	case data == "week_1":
@@ -176,7 +180,7 @@ func (ch *CommandHandler) HandleCallback(update tgbotapi.Update) error {
 	case strings.HasPrefix(data, "week_"):
 		return ch.exerciseHandler.HandleWeekAction(update.CallbackQuery, data)
 	case strings.HasPrefix(data, "insight_"):
-		return ch.exerciseHandler.HandleInsightGender(update.CallbackQuery, data)
+		return ch.exerciseHandler.HandleInsightGender(update.CallbackQuery, data, ch.historyManager, ch.ai)
 	case strings.HasPrefix(data, "notify_send_all_"):
 		return ch.handleSendAllNotifications(update.CallbackQuery, data)
 	case strings.HasPrefix(data, "notify_"):
