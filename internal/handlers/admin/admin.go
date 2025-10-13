@@ -79,6 +79,9 @@ func (h *Handler) HandleAdminHelp(callbackQuery *tgbotapi.CallbackQuery) error {
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("📢 Уведомления", "notifications_menu"),
 		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🎯 Финальный инсайт", "final_insight_menu"),
+		),
 	)
 
 	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)

@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"strings"
 
+	"Lovifyy_bot/internal/ai"
 	"Lovifyy_bot/internal/exercises"
 	"Lovifyy_bot/internal/handlers/admin"
 	"Lovifyy_bot/internal/handlers/chat"
 	"Lovifyy_bot/internal/handlers/diary"
 	exerciseHandlers "Lovifyy_bot/internal/handlers/exercises"
 	"Lovifyy_bot/internal/handlers/scheduling"
+	"Lovifyy_bot/internal/history"
 	"Lovifyy_bot/internal/models"
 	"Lovifyy_bot/internal/services"
 
@@ -22,6 +24,8 @@ type CommandHandler struct {
 	userManager         *models.UserManager
 	exerciseManager     *exercises.Manager
 	notificationService *services.NotificationService
+	historyManager      *history.Manager
+	ai                  *ai.OpenAIClient
 
 	// Специализированные обработчики
 	adminHandler      *admin.Handler
@@ -32,12 +36,14 @@ type CommandHandler struct {
 }
 
 // NewCommandHandler создает новый обработчик команд
-func NewCommandHandler(bot *tgbotapi.BotAPI, userManager *models.UserManager, exerciseManager *exercises.Manager, notificationService *services.NotificationService) *CommandHandler {
+func NewCommandHandler(bot *tgbotapi.BotAPI, userManager *models.UserManager, exerciseManager *exercises.Manager, notificationService *services.NotificationService, historyManager *history.Manager, ai *ai.OpenAIClient) *CommandHandler {
 	return &CommandHandler{
 		bot:                 bot,
 		userManager:         userManager,
 		exerciseManager:     exerciseManager,
 		notificationService: notificationService,
+		historyManager:      historyManager,
+		ai:                  ai,
 		
 		// Инициализируем специализированные обработчики
 		adminHandler:      admin.NewHandler(bot, userManager, exerciseManager, notificationService),
@@ -133,6 +139,10 @@ func (ch *CommandHandler) HandleCallback(update tgbotapi.Update) error {
 		return ch.handleExercisesMenu(update.CallbackQuery)
 	case data == "notifications_menu":
 		return ch.handleNotificationsMenu(update.CallbackQuery)
+	case data == "final_insight_menu":
+		return ch.adminHandler.HandleFinalInsightMenu(update.CallbackQuery)
+	case data == "generate_final_insight":
+		return ch.adminHandler.HandleGenerateFinalInsight(update.CallbackQuery, ch.historyManager, ch.ai)
 	case data == "schedule_notification":
 		return ch.schedulingHandler.HandleScheduleNotification(update.CallbackQuery)
 	case data == "view_notifications":
