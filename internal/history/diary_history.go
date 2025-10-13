@@ -32,7 +32,7 @@ func (m *Manager) SaveDiaryEntry(userID int64, username, entry string, week int,
 	return m.saveToFile(filename, entries)
 }
 
-// SaveDiaryEntryWithGender сохраняет запись в дневник с указанием гендера
+// SaveDiaryEntryWithGender сохраняет запись в дневник с указанием гендера (новый структурированный формат)
 func (m *Manager) SaveDiaryEntryWithGender(userID int64, username, entry string, week int, entryType, gender string) error {
 	diaryEntry := DiaryEntry{
 		Timestamp: time.Now(),
@@ -43,7 +43,8 @@ func (m *Manager) SaveDiaryEntryWithGender(userID int64, username, entry string,
 		Type:      entryType,
 	}
 
-	filename := m.getDiaryGenderFile(userID, entryType, gender)
+	// Используем новый структурированный формат: gender/week/type/
+	filename := m.getDiaryStructuredFile(userID, gender, week, entryType)
 	
 	// Загружаем существующие записи
 	var entries []DiaryEntry
@@ -146,7 +147,7 @@ func (m *Manager) GetDiaryEntriesByType(userID int64, entryType string) ([]Diary
 	return entries, nil
 }
 
-// GetDiaryEntriesByTypeAndGender получает записи дневника по типу и гендеру
+// GetDiaryEntriesByTypeAndGender получает записи дневника по типу и гендеру (старый формат)
 func (m *Manager) GetDiaryEntriesByTypeAndGender(userID int64, entryType, gender string) ([]DiaryEntry, error) {
 	filename := m.getDiaryGenderFile(userID, entryType, gender)
 	
@@ -156,4 +157,35 @@ func (m *Manager) GetDiaryEntriesByTypeAndGender(userID int64, entryType, gender
 	}
 
 	return entries, nil
+}
+
+// GetDiaryEntriesStructured получает записи дневника по структурированному формату: gender/week/type
+func (m *Manager) GetDiaryEntriesStructured(userID int64, gender string, week int, entryType string) ([]DiaryEntry, error) {
+	filename := m.getDiaryStructuredFile(userID, gender, week, entryType)
+	
+	var entries []DiaryEntry
+	if err := m.loadFromFile(filename, &entries); err != nil {
+		return nil, fmt.Errorf("failed to load diary entries: %w", err)
+	}
+	
+	return entries, nil
+}
+
+// GetAllDiaryEntriesForWeekAndGender получает ВСЕ записи дневника для конкретной недели и гендера (все типы)
+func (m *Manager) GetAllDiaryEntriesForWeekAndGender(userID int64, gender string, week int) ([]DiaryEntry, error) {
+	var allEntries []DiaryEntry
+	
+	// Получаем записи всех типов для данной недели и гендера
+	types := []string{"personal", "questions", "joint"}
+	
+	for _, entryType := range types {
+		entries, err := m.GetDiaryEntriesStructured(userID, gender, week, entryType)
+		if err != nil {
+			// Если файл не существует, это нормально - просто пропускаем
+			continue
+		}
+		allEntries = append(allEntries, entries...)
+	}
+	
+	return allEntries, nil
 }

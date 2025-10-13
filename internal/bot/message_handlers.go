@@ -201,15 +201,12 @@ func (b *EnterpriseBot) handleDiaryMessage(userID int64, messageText string) err
 			case "personal":
 				typeEmoji = "💭"
 				typeText = "Личные мысли"
-			case "partner":
-				typeEmoji = "💕"
-				typeText = "О партнере"
-			case "relationship":
-				typeEmoji = "🌟"
-				typeText = "О отношениях"
-			case "exercises":
-				typeEmoji = "📋"
-				typeText = "Упражнения недели"
+			case "questions":
+				typeEmoji = "❓"
+				typeText = "Ответы на вопросы"
+			case "joint":
+				typeEmoji = "👫"
+				typeText = "Ответы на совместные вопросы"
 			default:
 				typeEmoji = "📝"
 				typeText = "Запись"

@@ -75,9 +75,14 @@ func (b *EnterpriseBot) handleCallbackQuery(update tgbotapi.Update) error {
     case data == "exercise_week_4":
         return b.handleExerciseWeekCallbackNew(userID, 4)
     case strings.HasPrefix(data, "diary_type_"):
-        return b.handleDiaryTypeCallback(userID, data)
+        // Делегируем обработку типов записи дневника в CommandHandler
+        return b.commandHandler.HandleCallback(update)
     case strings.HasPrefix(data, "diary_gender_"):
-        return b.handleDiaryGenderCallback(userID, data)
+        // Делегируем обработку выбора пола дневника в CommandHandler
+        return b.commandHandler.HandleCallback(update)
+    case strings.HasPrefix(data, "diary_week_"):
+        // Делегируем обработку выбора недели дневника в CommandHandler
+        return b.commandHandler.HandleCallback(update)
     case strings.HasPrefix(data, "week_"):
         // Делегируем обработку недель в CommandHandler
         return b.commandHandler.HandleCallback(update)
@@ -104,43 +109,4 @@ func (b *EnterpriseBot) handleExerciseWeekCallbackNew(userID int64, week int) er
     return err
 }
 
-// handleDiaryGenderCallback обрабатывает выбор пола для дневника
-func (b *EnterpriseBot) handleDiaryGenderCallback(userID int64, data string) error {
-    // Парсим callback data: diary_gender_male или diary_gender_female
-    parts := strings.Split(data, "_")
-    if len(parts) < 3 {
-        msg := tgbotapi.NewMessage(userID, "❌ Неверный формат данных")
-        _, err := b.telegram.Send(msg)
-        return err
-    }
-
-    gender := parts[2] // male или female
-
-    // Показываем типы записей
-    text := "📔 Выберите тип записи в дневнике:"
-    
-    var genderEmoji string
-    if gender == "male" {
-        genderEmoji = "👨"
-    } else {
-        genderEmoji = "👩"
-    }
-
-    keyboard := tgbotapi.NewInlineKeyboardMarkup(
-        tgbotapi.NewInlineKeyboardRow(
-            tgbotapi.NewInlineKeyboardButtonData("📝 Личные размышления", "diary_type_personal_"+gender),
-        ),
-        tgbotapi.NewInlineKeyboardRow(
-            tgbotapi.NewInlineKeyboardButtonData("❓ Ответы на вопросы", "diary_type_questions_"+gender),
-        ),
-        tgbotapi.NewInlineKeyboardRow(
-            tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", "mode_diary"),
-        ),
-    )
-
-    msg := tgbotapi.NewMessage(userID, genderEmoji+" "+text)
-    msg.ReplyMarkup = keyboard
-    _, err := b.telegram.Send(msg)
-    return err
-}
 

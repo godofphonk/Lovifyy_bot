@@ -48,7 +48,7 @@ func NewCommandHandler(bot *tgbotapi.BotAPI, userManager *models.UserManager, ex
 		// Инициализируем специализированные обработчики
 		adminHandler:      admin.NewHandler(bot, userManager, exerciseManager, notificationService),
 		exerciseHandler:   exerciseHandlers.NewHandler(bot, userManager, exerciseManager),
-		diaryHandler:      diary.NewHandler(bot, userManager),
+		diaryHandler:      diary.NewHandler(bot, userManager, exerciseManager),
 		chatHandler:       chat.NewHandler(bot, userManager),
 		schedulingHandler: scheduling.NewHandler(bot, userManager, notificationService),
 	}

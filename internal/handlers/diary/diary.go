@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"Lovifyy_bot/internal/exercises"
 	"Lovifyy_bot/internal/models"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -11,15 +12,17 @@ import (
 
 // Handler обрабатывает функциональность дневника
 type Handler struct {
-	bot         *tgbotapi.BotAPI
-	userManager *models.UserManager
+	bot             *tgbotapi.BotAPI
+	userManager     *models.UserManager
+	exerciseManager *exercises.Manager
 }
 
 // NewHandler создает новый обработчик дневника
-func NewHandler(bot *tgbotapi.BotAPI, userManager *models.UserManager) *Handler {
+func NewHandler(bot *tgbotapi.BotAPI, userManager *models.UserManager, exerciseManager *exercises.Manager) *Handler {
 	return &Handler{
-		bot:         bot,
-		userManager: userManager,
+		bot:             bot,
+		userManager:     userManager,
+		exerciseManager: exerciseManager,
 	}
 }
 
@@ -49,6 +52,9 @@ func (h *Handler) HandleDiary(callbackQuery *tgbotapi.CallbackQuery) error {
 
 // HandleDiaryGender обрабатывает выбор пола для дневника - показывает выбор недели
 func (h *Handler) HandleDiaryGender(callbackQuery *tgbotapi.CallbackQuery, gender string) error {
+	// Добавляем логирование для отладки
+	fmt.Printf("🔍 HandleDiaryGender called with gender: %s\n", gender)
+	
 	var genderEmoji string
 	var genderText string
 	if gender == "male" {
@@ -75,6 +81,12 @@ func (h *Handler) HandleDiaryGender(callbackQuery *tgbotapi.CallbackQuery, gende
 	}
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	
+	// Удаляем старое сообщение
+	deleteMsg := tgbotapi.NewDeleteMessage(callbackQuery.Message.Chat.ID, callbackQuery.Message.MessageID)
+	h.bot.Send(deleteMsg)
+	
+	// Отправляем новое сообщение с новыми кнопками
 	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
 	msg.ReplyMarkup = keyboard
 	_, err := h.bot.Send(msg)
@@ -111,17 +123,20 @@ func (h *Handler) HandleDiaryWeek(callbackQuery *tgbotapi.CallbackQuery, data st
 			tgbotapi.NewInlineKeyboardButtonData("💭 Личные мысли", fmt.Sprintf("diary_type_%s_%s_personal", gender, week)),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("💕 О партнере", fmt.Sprintf("diary_type_%s_%s_partner", gender, week)),
+			tgbotapi.NewInlineKeyboardButtonData("❓ Ответы на вопросы", fmt.Sprintf("diary_type_%s_%s_questions", gender, week)),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🌟 О отношениях", fmt.Sprintf("diary_type_%s_%s_relationship", gender, week)),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📋 Упражнения недели", fmt.Sprintf("diary_type_%s_%s_exercises", gender, week)),
+			tgbotapi.NewInlineKeyboardButtonData("👫 Ответы на совместные вопросы", fmt.Sprintf("diary_type_%s_%s_joint", gender, week)),
 		),
 	}
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	
+	// Удаляем старое сообщение
+	deleteMsg := tgbotapi.NewDeleteMessage(callbackQuery.Message.Chat.ID, callbackQuery.Message.MessageID)
+	h.bot.Send(deleteMsg)
+	
+	// Отправляем новое сообщение с новыми кнопками
 	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
 	msg.ReplyMarkup = keyboard
 	_, err := h.bot.Send(msg)
@@ -130,9 +145,13 @@ func (h *Handler) HandleDiaryWeek(callbackQuery *tgbotapi.CallbackQuery, data st
 
 // HandleDiaryType обрабатывает выбор типа записи в дневнике
 func (h *Handler) HandleDiaryType(callbackQuery *tgbotapi.CallbackQuery, data string) error {
+	// Добавляем логирование для отладки
+	fmt.Printf("🔍 HandleDiaryType called with data: %s\n", data)
+	
 	// Парсим данные: diary_type_<gender>_<week>_<type>
 	parts := strings.Split(data, "_")
 	if len(parts) < 5 {
+		fmt.Printf("❌ Invalid callback data format: %s (parts: %v)\n", data, parts)
 		return fmt.Errorf("invalid diary type callback data: %s", data)
 	}
 
@@ -155,21 +174,70 @@ func (h *Handler) HandleDiaryType(callbackQuery *tgbotapi.CallbackQuery, data st
 	}
 
 	var typeText string
+	var response string
+	
 	switch diaryType {
 	case "personal":
 		typeText = "💭 Личные мысли"
-	case "partner":
-		typeText = "💕 О партнере"
-	case "relationship":
-		typeText = "🌟 О отношениях"
-	case "exercises":
-		typeText = "📋 Упражнения недели"
+		response = fmt.Sprintf("📝 Дневник %s %s - Неделя %s\n%s\n\n"+
+			"Режим записи активирован! Теперь просто напишите свои мысли, заметки или наблюдения. "+
+			"Я сохраню вашу запись в соответствующую категорию.\n\n"+
+			"Это ваше личное пространство для размышлений.", genderEmoji, genderText, week, typeText)
+	
+	case "questions":
+		typeText = "❓ Ответы на вопросы"
+		// Получаем вопросы недели из упражнений
+		weekNum := 1
+		switch week {
+		case "1": weekNum = 1
+		case "2": weekNum = 2
+		case "3": weekNum = 3
+		case "4": weekNum = 4
+		}
+		
+		weekData, err := h.exerciseManager.GetWeekExercise(weekNum)
+		if err != nil || weekData == nil {
+			response = fmt.Sprintf("📝 Дневник %s %s - Неделя %s\n%s\n\n"+
+				"❌ Не удалось загрузить вопросы для этой недели.\n\n"+
+				"Режим записи активирован! Напишите свои ответы на вопросы недели.", 
+				genderEmoji, genderText, week, typeText)
+		} else {
+			response = fmt.Sprintf("📝 Дневник %s %s - Неделя %s\n%s\n\n"+
+				"📋 **Вопросы недели:**\n%s\n\n"+
+				"Режим записи активирован! Напишите свои ответы на эти вопросы.", 
+				genderEmoji, genderText, week, typeText, weekData.Questions)
+		}
+	
+	case "joint":
+		typeText = "👫 Ответы на совместные вопросы"
+		// Получаем совместные вопросы недели из упражнений
+		weekNum := 1
+		switch week {
+		case "1": weekNum = 1
+		case "2": weekNum = 2
+		case "3": weekNum = 3
+		case "4": weekNum = 4
+		}
+		
+		weekData, err := h.exerciseManager.GetWeekExercise(weekNum)
+		if err != nil || weekData == nil {
+			response = fmt.Sprintf("📝 Дневник %s %s - Неделя %s\n%s\n\n"+
+				"❌ Не удалось загрузить совместные вопросы для этой недели.\n\n"+
+				"Режим записи активирован! Напишите свои ответы на совместные вопросы недели.", 
+				genderEmoji, genderText, week, typeText)
+		} else {
+			response = fmt.Sprintf("📝 Дневник %s %s - Неделя %s\n%s\n\n"+
+				"👫 **Совместные вопросы недели:**\n%s\n\n"+
+				"Режим записи активирован! Напишите свои ответы на эти совместные вопросы.", 
+				genderEmoji, genderText, week, typeText, weekData.JointQuestions)
+		}
+	
+	default:
+		typeText = "📝 Запись"
+		response = fmt.Sprintf("📝 Дневник %s %s - Неделя %s\n%s\n\n"+
+			"Режим записи активирован! Теперь просто напишите свои мысли, заметки или наблюдения.", 
+			genderEmoji, genderText, week, typeText)
 	}
-
-	response := fmt.Sprintf("📝 Дневник %s %s - Неделя %s\n%s\n\n"+
-		"Режим записи активирован! Теперь просто напишите свои мысли, заметки или наблюдения. "+
-		"Я сохраню вашу запись в соответствующую категорию.\n\n"+
-		"Это ваше личное пространство для размышлений.", genderEmoji, genderText, week, typeText)
 	
 	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
 	_, err := h.bot.Send(msg)

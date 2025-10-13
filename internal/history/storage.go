@@ -84,10 +84,17 @@ func (m *Manager) getDiaryTypeFile(userID int64, entryType string) string {
 	return filepath.Join(typeDir, fmt.Sprintf("user_%d.json", userID))
 }
 
-// getDiaryGenderFile возвращает путь к файлу дневника с учетом гендера
+// getDiaryGenderFile возвращает путь к файлу дневника с учетом гендера (старый формат)
 func (m *Manager) getDiaryGenderFile(userID int64, entryType, gender string) string {
 	typeDir := filepath.Join(m.diaryDir, fmt.Sprintf("diary_%s_%s", entryType, gender))
 	return filepath.Join(typeDir, fmt.Sprintf("user_%d.json", userID))
+}
+
+// getDiaryStructuredFile возвращает путь к файлу дневника в структурированном формате: gender/week/type/
+func (m *Manager) getDiaryStructuredFile(userID int64, gender string, week int, entryType string) string {
+	// Создаем структуру: gender/week/type/user_id.json
+	structuredDir := filepath.Join(m.diaryDir, gender, fmt.Sprintf("week_%d", week), entryType)
+	return filepath.Join(structuredDir, fmt.Sprintf("user_%d.json", userID))
 }
 
 // cleanResponse очищает ответ от блоков размышлений и лишнего текста
