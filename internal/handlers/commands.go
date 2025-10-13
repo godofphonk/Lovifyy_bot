@@ -79,13 +79,16 @@ func (ch *CommandHandler) HandleStart(update tgbotapi.Update) error {
 		"💌 Совет от меня: наслаждайтесь процессом, замечайте маленькие радости, делитесь впечатлениями и фиксируйте всё в мини-дневнике.\n" +
 		"Ваши отношения уникальны, и каждая честная беседа, каждое маленькое внимание друг к другу делает их крепче и теплее. 💒🎀"
 
-	// Создаем простую inline клавиатуру с двумя основными функциями
+	// Создаем простую inline клавиатуру с тремя основными функциями
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("💒 Задать вопрос об отношениях", "chat"),
+			tgbotapi.NewInlineKeyboardButtonData("💑 Упражнение недели", "advice"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📝 Мини дневник", "diary"),
+			tgbotapi.NewInlineKeyboardButtonData("📝 Мини-дневник", "diary"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💒 Задать вопрос о отношениях", "chat"),
 		),
 	)
 

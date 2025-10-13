@@ -4,26 +4,55 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// handleChatMode переключает в режим чата
+// handleChatMode обрабатывает команду /chat - активирует режим вопросов о отношениях
 func (b *EnterpriseBot) handleChatMode(userID int64) error {
-	b.userManager.SetState(userID, "chat")
-	msg := tgbotapi.NewMessage(userID, "💬 Режим чата активирован! Можете задавать вопросы.")
-	_, err := b.telegram.Send(msg)
-	return err
+    // Создаем фейковый update для использования существующего обработчика
+    update := tgbotapi.Update{
+        CallbackQuery: &tgbotapi.CallbackQuery{
+            Data: "chat",
+            From: &tgbotapi.User{ID: userID},
+            Message: &tgbotapi.Message{
+                Chat: &tgbotapi.Chat{ID: userID},
+            },
+        },
+    }
+    
+    // Используем существующий роутинг через HandleCallback
+    return b.commandHandler.HandleCallback(update)
 }
 
-// handleDiaryMode переключает в режим дневника
+// handleDiaryMode обрабатывает команду /diary - показывает мини-дневник
 func (b *EnterpriseBot) handleDiaryMode(userID int64) error {
-    b.userManager.SetState(userID, "diary")
-    msg := tgbotapi.NewMessage(userID, "📔 Режим дневника активирован! Пишите свои мысли.")
-    _, err := b.telegram.Send(msg)
-    return err
+    // Создаем фейковый update для использования существующего обработчика
+    update := tgbotapi.Update{
+        CallbackQuery: &tgbotapi.CallbackQuery{
+            Data: "diary",
+            From: &tgbotapi.User{ID: userID},
+            Message: &tgbotapi.Message{
+                Chat: &tgbotapi.Chat{ID: userID},
+            },
+        },
+    }
+    
+    // Используем существующий роутинг через HandleCallback
+    return b.commandHandler.HandleCallback(update)
 }
 
-// handleExercises больше не используется: показ «Упражнений» делегирован в CommandHandler
+// handleExercises обрабатывает команду /advice - показывает упражнения недели
 func (b *EnterpriseBot) handleExercises(userID int64) error {
-    // На всякий случай, предложим выбрать режим
-    return b.suggestMode(userID)
+    // Создаем фейковый update для использования существующего обработчика
+    update := tgbotapi.Update{
+        CallbackQuery: &tgbotapi.CallbackQuery{
+            Data: "advice",
+            From: &tgbotapi.User{ID: userID},
+            Message: &tgbotapi.Message{
+                Chat: &tgbotapi.Chat{ID: userID},
+            },
+        },
+    }
+    
+    // Используем существующий роутинг через HandleCallback
+    return b.commandHandler.HandleCallback(update)
 }
 
 // suggestMode предлагает выбрать режим
