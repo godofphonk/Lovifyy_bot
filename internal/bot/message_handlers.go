@@ -4,6 +4,9 @@ import (
 	"strings"
 	"time"
 
+	"Lovifyy_bot/internal/ai"
+	"Lovifyy_bot/internal/history"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -82,8 +85,36 @@ func (b *EnterpriseBot) handleChatMessage(userID int64, messageText string) erro
 		return err
 	}
 
-	// Генерируем ответ
-	response, err := b.ai.Generate(messageText)
+	// Получаем историю с системным промптом
+	historyMessages, err := b.historyManager.GetOpenAIHistory(userID, b.config.Telegram.SystemPrompt, 10)
+	if err != nil {
+		b.logger.WithError(err).Error("Failed to get chat history")
+		// Продолжаем без истории - создаем только системный промпт
+		historyMessages = []history.OpenAIMessage{
+			{
+				Role:    "system",
+				Content: b.config.Telegram.SystemPrompt,
+			},
+		}
+	}
+	
+	// Добавляем текущее сообщение пользователя
+	historyMessages = append(historyMessages, history.OpenAIMessage{
+		Role:    "user",
+		Content: messageText,
+	})
+
+	// Конвертируем в формат ai пакета
+	aiMessages := make([]ai.OpenAIMessage, len(historyMessages))
+	for i, msg := range historyMessages {
+		aiMessages[i] = ai.OpenAIMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	// Генерируем ответ с историей и системным промптом
+	response, err := b.ai.GenerateWithHistory(aiMessages)
 	if err != nil {
 		b.logger.WithError(err).Error("Failed to generate AI response")
 		
