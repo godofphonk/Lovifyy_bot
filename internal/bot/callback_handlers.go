@@ -87,6 +87,9 @@ func (b *EnterpriseBot) handleCallbackQuery(update tgbotapi.Update) error {
     case strings.HasPrefix(data, "notify_"):
         // Делегируем обработку уведомлений в CommandHandler
         return b.commandHandler.HandleCallback(update)
+    case strings.HasPrefix(data, "final_insight") || data == "generate_final_insight":
+        // Делегируем обработку финального инсайта в CommandHandler
+        return b.commandHandler.HandleCallback(update)
     default:
         b.logger.WithField("callback_data", data).Warn("Unknown callback query")
         return nil

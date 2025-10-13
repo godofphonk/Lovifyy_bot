@@ -61,7 +61,7 @@ func NewEnterpriseBot(cfg *config.Config, log *logger.Logger) (*EnterpriseBot, e
 	log.WithField("bot_username", telegram.Self.UserName).Info("Telegram bot authorized successfully")
 
 	// Инициализируем AI клиент
-	aiClient := ai.NewOpenAIClient(cfg.OpenAI.APIKey)
+	aiClient := ai.NewOpenAIClient("gpt-4o-mini")
 
 	// Инициализируем менеджеры
 	userManager := models.NewUserManager([]int64{1805441944}) // Список админов
@@ -104,7 +104,7 @@ func NewEnterpriseBot(cfg *config.Config, log *logger.Logger) (*EnterpriseBot, e
 
 	// Инициализируем обработчик команд
 	bot.commandHandler = handlers.NewCommandHandler(
-		telegram, userManager, exerciseManager, notificationService,
+		telegram, userManager, exerciseManager, notificationService, historyManager, aiClient,
 	)
 
 	return bot, nil
