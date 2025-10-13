@@ -64,7 +64,7 @@ func NewEnterpriseBot(cfg *config.Config, log *logger.Logger) (*EnterpriseBot, e
 	aiClient := ai.NewOpenAIClient("gpt-4o-mini")
 
 	// Инициализируем менеджеры
-	userManager := models.NewUserManager([]int64{1805441944}) // Список админов
+	userManager := models.NewUserManager([]int64{1805441944, 1243795198}) // Список админов
 	historyManager := history.NewManager()
 	exerciseManager := exercises.NewManager()
 	

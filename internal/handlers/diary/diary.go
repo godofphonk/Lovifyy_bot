@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"Lovifyy_bot/internal/exercises"
+	"Lovifyy_bot/internal/history"
 	"Lovifyy_bot/internal/models"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -15,14 +16,16 @@ type Handler struct {
 	bot             *tgbotapi.BotAPI
 	userManager     *models.UserManager
 	exerciseManager *exercises.Manager
+	historyManager  *history.Manager
 }
 
 // NewHandler создает новый обработчик дневника
-func NewHandler(bot *tgbotapi.BotAPI, userManager *models.UserManager, exerciseManager *exercises.Manager) *Handler {
+func NewHandler(bot *tgbotapi.BotAPI, userManager *models.UserManager, exerciseManager *exercises.Manager, historyManager *history.Manager) *Handler {
 	return &Handler{
 		bot:             bot,
 		userManager:     userManager,
 		exerciseManager: exerciseManager,
+		historyManager:  historyManager,
 	}
 }
 
@@ -244,13 +247,186 @@ func (h *Handler) HandleDiaryType(callbackQuery *tgbotapi.CallbackQuery, data st
 	return err
 }
 
-// HandleDiaryView обрабатывает просмотр записей дневника
+// HandleDiaryView обрабатывает просмотр записей дневника - показывает выбор пола
 func (h *Handler) HandleDiaryView(callbackQuery *tgbotapi.CallbackQuery) error {
 	response := "👀 Просмотр записей дневника\n\n" +
-		"Здесь будут отображаться ваши записи из мини-дневника.\n\n" +
-		"Функция просмотра записей будет доступна в следующих обновлениях."
+		"Выберите пол для просмотра записей:"
+
+	// Создаем кнопки выбора пола для просмотра
+	buttons := [][]tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("👨 Парень", "diary_view_male"),
+			tgbotapi.NewInlineKeyboardButtonData("👩 Девушка", "diary_view_female"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", "diary"),
+		),
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
 	
-	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
-	_, err := h.bot.Send(msg)
+	// Редактируем существующее сообщение
+	editMsg := tgbotapi.NewEditMessageText(callbackQuery.Message.Chat.ID, callbackQuery.Message.MessageID, response)
+	editMsg.ReplyMarkup = &keyboard
+	_, err := h.bot.Send(editMsg)
+	return err
+}
+
+// HandleDiaryViewGender обрабатывает выбор пола для просмотра - показывает выбор недели
+func (h *Handler) HandleDiaryViewGender(callbackQuery *tgbotapi.CallbackQuery, data string) error {
+	// Парсим данные: diary_view_<gender>
+	parts := strings.Split(data, "_")
+	if len(parts) < 3 {
+		return fmt.Errorf("invalid diary view callback data: %s", data)
+	}
+
+	gender := parts[2]
+	
+	var genderEmoji string
+	var genderText string
+	if gender == "male" {
+		genderEmoji = "👨"
+		genderText = "парня"
+	} else {
+		genderEmoji = "👩"
+		genderText = "девушки"
+	}
+
+	response := fmt.Sprintf("👀 Просмотр записей дневника %s %s\n\n"+
+		"Выберите неделю для просмотра:", genderEmoji, genderText)
+
+	// Создаем кнопки выбора недели для просмотра
+	buttons := [][]tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("1️⃣ Неделя 1", fmt.Sprintf("diary_view_week_%s_1", gender)),
+			tgbotapi.NewInlineKeyboardButtonData("2️⃣ Неделя 2", fmt.Sprintf("diary_view_week_%s_2", gender)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("3️⃣ Неделя 3", fmt.Sprintf("diary_view_week_%s_3", gender)),
+			tgbotapi.NewInlineKeyboardButtonData("4️⃣ Неделя 4", fmt.Sprintf("diary_view_week_%s_4", gender)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", "diary_view"),
+		),
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	
+	// Редактируем существующее сообщение
+	editMsg := tgbotapi.NewEditMessageText(callbackQuery.Message.Chat.ID, callbackQuery.Message.MessageID, response)
+	editMsg.ReplyMarkup = &keyboard
+	_, err := h.bot.Send(editMsg)
+	return err
+}
+
+// HandleDiaryViewWeek обрабатывает просмотр записей конкретной недели
+func (h *Handler) HandleDiaryViewWeek(callbackQuery *tgbotapi.CallbackQuery, data string) error {
+	// Парсим данные: diary_view_week_<gender>_<week>
+	parts := strings.Split(data, "_")
+	if len(parts) < 5 {
+		return fmt.Errorf("invalid diary view week callback data: %s", data)
+	}
+
+	gender := parts[3]
+	week := parts[4]
+	
+	weekNum := 1
+	switch week {
+	case "1": weekNum = 1
+	case "2": weekNum = 2
+	case "3": weekNum = 3
+	case "4": weekNum = 4
+	}
+	
+	var genderEmoji string
+	var genderText string
+	if gender == "male" {
+		genderEmoji = "👨"
+		genderText = "парня"
+	} else {
+		genderEmoji = "👩"
+		genderText = "девушки"
+	}
+
+	userID := callbackQuery.From.ID
+	
+	// Получаем все записи для данной недели и пола
+	allEntries, err := h.historyManager.GetAllDiaryEntriesForWeekAndGender(userID, gender, weekNum)
+	if err != nil || len(allEntries) == 0 {
+		response := fmt.Sprintf("👀 Записи дневника %s %s - Неделя %d\n\n"+
+			"📝 Записей не найдено.\n\n"+
+			"Для создания записей используйте:\n"+
+			"• Кнопку \"📝 Мини дневник\"\n"+
+			"• Выберите %s %s\n"+
+			"• Выберите неделю %d\n"+
+			"• Сделайте записи в любой категории",
+			genderEmoji, genderText, weekNum, genderEmoji, genderText, weekNum)
+
+		editMsg := tgbotapi.NewEditMessageText(callbackQuery.Message.Chat.ID, callbackQuery.Message.MessageID, response)
+		
+		// Добавляем кнопку "Назад"
+		backButton := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", fmt.Sprintf("diary_view_%s", gender)),
+			),
+		)
+		editMsg.ReplyMarkup = &backButton
+		
+		_, err = h.bot.Send(editMsg)
+		return err
+	}
+
+	// Группируем записи по типам
+	entriesByType := make(map[string][]history.DiaryEntry)
+	for _, entry := range allEntries {
+		entriesByType[entry.Type] = append(entriesByType[entry.Type], entry)
+	}
+
+	// Формируем ответ с записями
+	response := fmt.Sprintf("👀 Записи дневника %s %s - Неделя %d\n\n", genderEmoji, genderText, weekNum)
+	
+	typeNames := map[string]string{
+		"personal": "💭 Личные мысли",
+		"questions": "❓ Ответы на вопросы", 
+		"joint": "👫 Ответы на совместные вопросы",
+	}
+	
+	entryCount := 0
+	for entryType, entries := range entriesByType {
+		if len(entries) > 0 {
+			typeName, exists := typeNames[entryType]
+			if !exists {
+				typeName = fmt.Sprintf("📝 %s", entryType)
+			}
+			
+			response += fmt.Sprintf("%s:\n", typeName)
+			for i, entry := range entries {
+				entryCount++
+				// Ограничиваем длину записи для краткости
+				entryText := entry.Entry
+				if len(entryText) > 100 {
+					entryText = entryText[:100] + "..."
+				}
+				response += fmt.Sprintf("%d. %s (%s)\n", i+1, entryText, entry.Timestamp.Format("02.01 15:04"))
+			}
+			response += "\n"
+		}
+	}
+	
+	response += fmt.Sprintf("📊 Всего записей: %d", entryCount)
+
+	editMsg := tgbotapi.NewEditMessageText(callbackQuery.Message.Chat.ID, callbackQuery.Message.MessageID, response)
+	
+	// Добавляем кнопки навигации
+	buttons := [][]tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", fmt.Sprintf("diary_view_%s", gender)),
+			tgbotapi.NewInlineKeyboardButtonData("🏠 Главное меню", "main_menu"),
+		),
+	}
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	editMsg.ReplyMarkup = &keyboard
+	
+	_, err = h.bot.Send(editMsg)
 	return err
 }

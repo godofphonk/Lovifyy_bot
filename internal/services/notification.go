@@ -111,7 +111,7 @@ func (ns *NotificationService) SendNotificationToAll(message string) error {
 	if err != nil {
 		log.Printf("❌ Ошибка получения списка пользователей: %v", err)
 		// Fallback: отправляем только админам
-		userIDs = []int64{1805441944} // ID админа
+		userIDs = []int64{1805441944, 1243795198} // ID админов
 	}
 	
 	if len(userIDs) == 0 {

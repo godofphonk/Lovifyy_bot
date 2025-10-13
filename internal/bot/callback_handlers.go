@@ -83,6 +83,15 @@ func (b *EnterpriseBot) handleCallbackQuery(update tgbotapi.Update) error {
     case strings.HasPrefix(data, "diary_week_"):
         // Делегируем обработку выбора недели дневника в CommandHandler
         return b.commandHandler.HandleCallback(update)
+    case data == "diary_view":
+        // Делегируем обработку просмотра записей дневника в CommandHandler
+        return b.commandHandler.HandleCallback(update)
+    case strings.HasPrefix(data, "diary_view_"):
+        // Делегируем обработку просмотра записей дневника в CommandHandler
+        return b.commandHandler.HandleCallback(update)
+    case data == "main_menu":
+        // Делегируем обработку главного меню в CommandHandler
+        return b.commandHandler.HandleCallback(update)
     case strings.HasPrefix(data, "week_"):
         // Делегируем обработку недель в CommandHandler
         return b.commandHandler.HandleCallback(update)

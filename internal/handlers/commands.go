@@ -48,7 +48,7 @@ func NewCommandHandler(bot *tgbotapi.BotAPI, userManager *models.UserManager, ex
 		// Инициализируем специализированные обработчики
 		adminHandler:      admin.NewHandler(bot, userManager, exerciseManager, notificationService),
 		exerciseHandler:   exerciseHandlers.NewHandler(bot, userManager, exerciseManager),
-		diaryHandler:      diary.NewHandler(bot, userManager, exerciseManager),
+		diaryHandler:      diary.NewHandler(bot, userManager, exerciseManager, historyManager),
 		chatHandler:       chat.NewHandler(bot, userManager),
 		schedulingHandler: scheduling.NewHandler(bot, userManager, notificationService),
 	}
@@ -79,16 +79,13 @@ func (ch *CommandHandler) HandleStart(update tgbotapi.Update) error {
 		"💌 Совет от меня: наслаждайтесь процессом, замечайте маленькие радости, делитесь впечатлениями и фиксируйте всё в мини-дневнике.\n" +
 		"Ваши отношения уникальны, и каждая честная беседа, каждое маленькое внимание друг к другу делает их крепче и теплее. 💒🎀"
 
-	// Создаем простую inline клавиатуру с тремя основными функциями точно как в legacy
+	// Создаем простую inline клавиатуру с двумя основными функциями
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("💑 Упражнение недели", "advice"),
+			tgbotapi.NewInlineKeyboardButtonData("💒 Задать вопрос об отношениях", "chat"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("💌 Мини-дневник", "diary"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("💒 Задать вопрос о отношениях", "chat"),
+			tgbotapi.NewInlineKeyboardButtonData("📝 Мини дневник", "diary"),
 		),
 	)
 
@@ -161,10 +158,19 @@ func (ch *CommandHandler) HandleCallback(update tgbotapi.Update) error {
 		return ch.diaryHandler.HandleDiaryGender(update.CallbackQuery, "female")
 	case data == "diary_view":
 		return ch.diaryHandler.HandleDiaryView(update.CallbackQuery)
+	case data == "main_menu":
+		return ch.HandleStart(tgbotapi.Update{Message: &tgbotapi.Message{
+			From: update.CallbackQuery.From,
+			Chat: update.CallbackQuery.Message.Chat,
+		}})
 	case strings.HasPrefix(data, "diary_week_"):
 		return ch.diaryHandler.HandleDiaryWeek(update.CallbackQuery, data)
 	case strings.HasPrefix(data, "diary_type_"):
 		return ch.diaryHandler.HandleDiaryType(update.CallbackQuery, data)
+	case strings.HasPrefix(data, "diary_view_week_"):
+		return ch.diaryHandler.HandleDiaryViewWeek(update.CallbackQuery, data)
+	case strings.HasPrefix(data, "diary_view_") && !strings.HasPrefix(data, "diary_view_week_"):
+		return ch.diaryHandler.HandleDiaryViewGender(update.CallbackQuery, data)
 
 	// Недели упражнений
 	case data == "week_1":

@@ -68,12 +68,6 @@ func (b *EnterpriseBot) setupCommands() error {
 
 	commands := []tgbotapi.BotCommand{
 		{Command: "start", Description: "🚀 Начать работу с ботом"},
-		{Command: "help", Description: "ℹ️ Справка по командам"},
-		{Command: "chat", Description: "💬 Режим чата"},
-		{Command: "diary", Description: "📔 Мини-дневник"},
-		{Command: "advice", Description: "👩🏼‍❤️‍👨🏻 Упражнения недели"},
-		{Command: "adminhelp", Description: "🔧 Админ панель"},
-		{Command: "metrics", Description: "📊 Метрики (только для админов)"},
 	}
 
 	config := tgbotapi.NewSetMyCommands(commands...)
