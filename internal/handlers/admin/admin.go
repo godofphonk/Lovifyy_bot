@@ -1,9 +1,9 @@
 package admin
 
 import (
-	"Lovifyy_bot/internal/exercises"
-	"Lovifyy_bot/internal/models"
-	"Lovifyy_bot/internal/services"
+	"github.com/godofphonk/lovifyy-bot/internal/exercises"
+	"github.com/godofphonk/lovifyy-bot/internal/models"
+	"github.com/godofphonk/lovifyy-bot/internal/services"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )

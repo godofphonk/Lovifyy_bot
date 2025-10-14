@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"Lovifyy_bot/internal/models"
-	"Lovifyy_bot/tests/mocks"
+	"github.com/godofphonk/lovifyy-bot/internal/models"
+	"github.com/godofphonk/lovifyy-bot/tests/mocks"
 )
 
 func TestNotificationServiceIntegration(t *testing.T) {

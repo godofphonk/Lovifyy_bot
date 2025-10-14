@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"Lovifyy_bot/internal/logger"
+	"github.com/godofphonk/lovifyy-bot/internal/logger"
 )
 
 // Load загружает конфигурацию из переменных окружения и файла

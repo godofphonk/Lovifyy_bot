@@ -28,7 +28,11 @@ go.work
 
 # Environment variables (NEVER COMMIT THESE!)
 .env
-.env.*
+.env.local
+.env.production
+.env.development
+.env.server
+.env.docker
 config.json
 *.key
 *.pem

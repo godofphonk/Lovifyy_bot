@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"Lovifyy_bot/internal/ai"
+	"github.com/godofphonk/lovifyy-bot/internal/ai"
 )
 
 func TestOpenAIClient(t *testing.T) {

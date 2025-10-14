@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"Lovifyy_bot/internal/logger"
+	"github.com/godofphonk/lovifyy-bot/internal/logger"
 )
 
 // Manager управляет graceful shutdown

@@ -2,9 +2,9 @@ package interfaces
 
 import (
 	"time"
-	"Lovifyy_bot/internal/ai"
-	"Lovifyy_bot/internal/history"
-	"Lovifyy_bot/internal/models"
+	"github.com/godofphonk/lovifyy-bot/internal/ai"
+	"github.com/godofphonk/lovifyy-bot/internal/history"
+	"github.com/godofphonk/lovifyy-bot/internal/models"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 

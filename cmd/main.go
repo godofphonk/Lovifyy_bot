@@ -6,11 +6,11 @@ import (
 	"os"
 	"time"
 
-	"Lovifyy_bot/internal/bot"
-	"Lovifyy_bot/internal/config"
-	"Lovifyy_bot/internal/logger"
-	"Lovifyy_bot/internal/metrics"
-	"Lovifyy_bot/internal/shutdown"
+	"github.com/godofphonk/lovifyy-bot/internal/bot"
+	"github.com/godofphonk/lovifyy-bot/internal/config"
+	"github.com/godofphonk/lovifyy-bot/internal/logger"
+	"github.com/godofphonk/lovifyy-bot/internal/metrics"
+	"github.com/godofphonk/lovifyy-bot/internal/shutdown"
 )
 
 var (

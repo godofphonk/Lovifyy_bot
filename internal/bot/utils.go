@@ -3,8 +3,8 @@ package bot
 import (
 	"time"
 
-	"Lovifyy_bot/internal/metrics"
-	"Lovifyy_bot/internal/logger"
+	"github.com/godofphonk/lovifyy-bot/internal/metrics"
+	"github.com/godofphonk/lovifyy-bot/internal/logger"
 )
 
 // GetMetrics возвращает метрики бота

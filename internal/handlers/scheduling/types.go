@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"Lovifyy_bot/internal/models"
+	"github.com/godofphonk/lovifyy-bot/internal/models"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )

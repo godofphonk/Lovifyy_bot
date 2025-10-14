@@ -1,4 +1,4 @@
-module Lovifyy_bot
+module github.com/godofphonk/lovifyy-bot
 
 go 1.23.0
 

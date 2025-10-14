@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"Lovifyy_bot/internal/models"
+	"github.com/godofphonk/lovifyy-bot/internal/models"
 )
 
 type ScheduledNotification struct {

@@ -3,7 +3,7 @@ package tests
 import (
 	"testing"
 	"time"
-	"Lovifyy_bot/internal/models"
+	"github.com/godofphonk/lovifyy-bot/internal/models"
 )
 
 func TestUserManager(t *testing.T) {

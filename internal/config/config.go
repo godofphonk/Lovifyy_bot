@@ -3,7 +3,7 @@ package config
 import (
 	"time"
 
-	"Lovifyy_bot/internal/logger"
+	"github.com/godofphonk/lovifyy-bot/internal/logger"
 )
 
 // Config основная конфигурация приложения

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"Lovifyy_bot/internal/exercises"
-	"Lovifyy_bot/internal/history"
-	"Lovifyy_bot/internal/models"
+	"github.com/godofphonk/lovifyy-bot/internal/exercises"
+	"github.com/godofphonk/lovifyy-bot/internal/history"
+	"github.com/godofphonk/lovifyy-bot/internal/models"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
