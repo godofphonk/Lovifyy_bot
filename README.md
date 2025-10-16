@@ -1,9 +1,8 @@
 # 🤖 Lovifyy Bot
 
-**Enterprise-grade Telegram bot for relationship counseling and psychological research**
+** Telegram bot for relationship counseling and psychological research**
 
-A Telegram bot built with Go, featuring AI-powered counseling, structured exercises, and comprehensive admin tools. 
-Originally developed for diploma research on attachment styles in relationships.
+A Telegram bot built with Go, featuring AI-powered counseling, structured exercises, and comprehensive admin tools.
 
 ## 🎯 Key Features
 
