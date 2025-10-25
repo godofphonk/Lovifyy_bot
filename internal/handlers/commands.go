@@ -153,6 +153,8 @@ func (ch *CommandHandler) HandleCallback(update tgbotapi.Update) error {
 		return ch.handleCustomNotification(update.CallbackQuery)
 	case data == "notify_schedule_custom":
 		return ch.handleScheduleCustomNotification(update.CallbackQuery)
+	case data == "show_recipients":
+		return ch.handleShowRecipients(update.CallbackQuery)
 
 	// Дневник
 	case data == "diary_gender_male":
@@ -552,12 +554,80 @@ func (ch *CommandHandler) handleSendAllNotifications(callbackQuery *tgbotapi.Cal
 	// Получаем количество пользователей
 	userCount, _ := ch.notificationService.GetUserCount()
 
-	// Отправляем подтверждение
+	// Отправляем подтверждение с кнопкой для просмотра получателей
 	confirmText := fmt.Sprintf("✅ Уведомление %s успешно отправлено!\n\n"+
 		"👥 Получателей: %d пользователей\n"+
 		"📤 Статус: Доставлено", typeName, userCount)
 	
+	// Добавляем кнопку для просмотра списка получателей
+	kb := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("👥 Показать получателей", "show_recipients"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Назад к уведомлениям", "notifications_menu"),
+		),
+	)
+	
 	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, confirmText)
+	msg.ReplyMarkup = kb
+	_, err = ch.bot.Send(msg)
+	return err
+}
+
+// handleShowRecipients показывает список получателей уведомлений
+func (ch *CommandHandler) handleShowRecipients(callbackQuery *tgbotapi.CallbackQuery) error {
+	userID := callbackQuery.From.ID
+
+	if !ch.userManager.IsAdmin(userID) {
+		msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		_, err := ch.bot.Send(msg)
+		return err
+	}
+
+	// Получаем список всех активных пользователей
+	users, err := ch.notificationService.GetAllUsers()
+	if err != nil {
+		errorMsg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, 
+			fmt.Sprintf("❌ Ошибка получения списка пользователей: %v", err))
+		ch.bot.Send(errorMsg)
+		return err
+	}
+
+	if len(users) == 0 {
+		msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, 
+			"📋 Список получателей пуст.\n\nНет активных пользователей для отправки уведомлений.")
+		_, err := ch.bot.Send(msg)
+		return err
+	}
+
+	// Формируем список получателей
+	text := fmt.Sprintf("👥 **Получатели уведомлений** (%d пользователей):\n\n", len(users))
+	
+	for i, user := range users {
+		// Форматируем username с @ если есть, иначе показываем ID
+		var userDisplay string
+		if user.Username != "" {
+			userDisplay = "@" + user.Username
+		} else {
+			userDisplay = fmt.Sprintf("ID: %d", user.UserID)
+		}
+		
+		// Добавляем информацию о последней активности
+		lastSeen := user.LastSeen.Format("02.01.2006 15:04")
+		text += fmt.Sprintf("%d. %s\n   📅 Последняя активность: %s\n\n", i+1, userDisplay, lastSeen)
+	}
+
+	// Добавляем кнопку "Назад"
+	kb := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Назад к уведомлениям", "notifications_menu"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = kb
 	_, err = ch.bot.Send(msg)
 	return err
 }

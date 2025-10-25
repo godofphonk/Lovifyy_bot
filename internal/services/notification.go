@@ -225,3 +225,8 @@ func (ns *NotificationService) UpdateUserActivity(userID int64) error {
 func (ns *NotificationService) GetUserCount() (int, error) {
 	return ns.userStorage.GetUserCount()
 }
+
+// GetAllUsers возвращает список всех активных пользователей с их данными
+func (ns *NotificationService) GetAllUsers() ([]models.UserInfo, error) {
+	return ns.userStorage.GetAllActiveUsers()
+}
