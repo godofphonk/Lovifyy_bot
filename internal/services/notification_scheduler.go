@@ -74,15 +74,8 @@ func (ns *NotificationService) ScheduleNotification(sendAt time.Time, typ models
 	
 	id := fmt.Sprintf("job_%d", time.Now().UnixNano())
 	
-	// Генерируем сообщение заранее для предпросмотра
-	var message string
-	if typ != "" { // Только для стандартных типов
-		message, err = ns.GenerateNotification(typ)
-		if err != nil {
-			// Если не удалось сгенерировать, сохраняем без сообщения
-			message = ""
-		}
-	}
+	// НЕ генерируем сообщение заранее - будем генерировать при отправке
+	// Это обеспечит уникальность каждого уведомления
 	
 	items = append(items, ScheduledNotification{
 		ID: id,
@@ -90,7 +83,7 @@ func (ns *NotificationService) ScheduleNotification(sendAt time.Time, typ models
 		SendAt: sendAt,
 		Recipients: recipients,
 		CreatedAt: time.Now(),
-		Message: message,
+		Message: "", // Пустое сообщение - будет генерироваться при отправке
 	})
 	if err := ns.saveSchedule(items); err != nil { return "", err }
 	return id, nil
@@ -144,8 +137,33 @@ func (ns *NotificationService) StartScheduler(stop <-chan struct{}) {
 					remaining = append(remaining, it)
 					continue
 				}
-				// due: generate and send
-				_ = ns.SendInstantNotification(it.Type, it.Recipients)
+				// due: send notification
+				var message string
+				var err error
+				
+				// Если есть кастомный текст, используем его
+				if it.CustomText != "" {
+					message = it.CustomText
+				} else if it.Message != "" {
+					// Если есть заранее сгенерированное сообщение, используем его
+					message = it.Message
+				} else {
+					// Если нет заранее сгенерированного сообщения, генерируем новое
+					message, err = ns.GenerateNotification(it.Type)
+					if err != nil {
+						// Если не удалось сгенерировать, пропускаем
+						continue
+					}
+				}
+				
+				// Отправляем сообщение
+				if len(it.Recipients) == 0 {
+					_ = ns.SendNotificationToAll(message)
+				} else {
+					for _, userID := range it.Recipients {
+						_ = ns.SendNotificationToUser(userID, message)
+					}
+				}
 			}
 			_ = ns.saveSchedule(remaining)
 		}
