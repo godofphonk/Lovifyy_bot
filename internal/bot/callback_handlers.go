@@ -49,6 +49,8 @@ func (b *EnterpriseBot) handleCallbackQuery(update tgbotapi.Update) error {
         return b.commandHandler.HandleCallback(update)
     case data == "notify_schedule_custom":
         return b.commandHandler.HandleCallback(update)
+    case data == "show_recipients":
+        return b.commandHandler.HandleCallback(update)
     case strings.HasPrefix(data, "schedule_date_"):
         return b.commandHandler.HandleCallback(update)
     case strings.HasPrefix(data, "schedule_time_"):
