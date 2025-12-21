@@ -172,8 +172,18 @@ func (c *OpenAIClient) createHTTPClient() *http.Client {
 		Timeout: 30 * time.Second,
 	}
 
-	// Проверяем переменные окружения для прокси
-	proxyURL := os.Getenv("HTTPS_PROXY")
+	// Проверяем переменные окружения для прокси (OpenAI специфичные)
+	proxyURL := os.Getenv("OPENAI_HTTPS_PROXY")
+	if proxyURL == "" {
+		proxyURL = os.Getenv("OPENAI_HTTP_PROXY")
+	}
+	if proxyURL == "" {
+		proxyURL = os.Getenv("OPENAI_PROXY")
+	}
+	// Если OpenAI прокси не задан, проверяем общие прокси
+	if proxyURL == "" {
+		proxyURL = os.Getenv("HTTPS_PROXY")
+	}
 	if proxyURL == "" {
 		proxyURL = os.Getenv("HTTP_PROXY")
 	}
