@@ -106,12 +106,6 @@ func (h *Handler) HandleWeek(callbackQuery *tgbotapi.CallbackQuery, weekNum int)
 		tgbotapi.NewInlineKeyboardButtonData("💡 Подсказки", fmt.Sprintf("week_%d_tips", weekNum)),
 	))
 
-	if exercise.Insights != "" {
-		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🔍 Инсайт", fmt.Sprintf("week_%d_insights", weekNum)),
-		))
-	}
-
 	if exercise.JointQuestions != "" {
 		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("👫 Совместные вопросы", fmt.Sprintf("week_%d_joint", weekNum)),
