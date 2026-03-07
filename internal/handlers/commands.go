@@ -690,7 +690,7 @@ func (ch *CommandHandler) HandleSetWeek(update tgbotapi.Update) error {
 		_, err := ch.bot.Send(msg)
 		return err
 	}
-
+ 
 	// Получаем аргументы команды
 	args := strings.Fields(update.Message.Text)
 
