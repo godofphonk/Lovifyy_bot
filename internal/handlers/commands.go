@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/godofphonk/lovifyy-bot/internal/ai"
@@ -44,7 +45,7 @@ func NewCommandHandler(bot *tgbotapi.BotAPI, userManager *models.UserManager, ex
 		notificationService: notificationService,
 		historyManager:      historyManager,
 		ai:                  ai,
-		
+
 		// Инициализируем специализированные обработчики
 		adminHandler:      admin.NewHandler(bot, userManager, exerciseManager, notificationService),
 		exerciseHandler:   exerciseHandlers.NewHandler(bot, userManager, exerciseManager),
@@ -58,11 +59,11 @@ func NewCommandHandler(bot *tgbotapi.BotAPI, userManager *models.UserManager, ex
 func (ch *CommandHandler) HandleStart(update tgbotapi.Update) error {
 	userID := update.Message.From.ID
 	username := update.Message.From.UserName
-	
+
 	// Регистрируем пользователя в системе уведомлений
 	ch.notificationService.RegisterUser(userID, username)
 	ch.notificationService.UpdateUserActivity(userID)
-	
+
 	ch.userManager.ClearState(userID)
 
 	// Точное приветственное сообщение из legacy
@@ -137,6 +138,8 @@ func (ch *CommandHandler) HandleCallback(update tgbotapi.Update) error {
 		return ch.adminHandler.HandleSetWelcomeMenu(update.CallbackQuery)
 	case data == "exercises_menu":
 		return ch.handleExercisesMenu(update.CallbackQuery)
+	case strings.HasPrefix(data, "exercise_week_"):
+		return ch.handleExerciseWeekCallback(update.CallbackQuery, data)
 	case data == "notifications_menu":
 		return ch.handleNotificationsMenu(update.CallbackQuery)
 	case data == "final_insight_menu":
@@ -231,6 +234,39 @@ func (ch *CommandHandler) handleLegacyCallbacks(callbackQuery *tgbotapi.Callback
 }
 
 // Временные функции (будут перенесены в соответствующие пакеты)
+func (ch *CommandHandler) handleExerciseWeekCallback(callbackQuery *tgbotapi.CallbackQuery, data string) error {
+	userID := callbackQuery.From.ID
+
+	if !ch.userManager.IsAdmin(userID) {
+		msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, "❌ Эта функция доступна только администраторам.")
+		_, err := ch.bot.Send(msg)
+		return err
+	}
+
+	// Извлекаем номер недели из callback data
+	parts := strings.Split(data, "_")
+	if len(parts) < 3 {
+		msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, "❌ Неверный формат данных недели")
+		_, err := ch.bot.Send(msg)
+		return err
+	}
+
+	weekNum := parts[2]
+	response := fmt.Sprintf("🗓️ Неделя %s - Настройка упражнений\n\n⚙️ Функция настройки упражнений для недели %s находится в разработке.", weekNum, weekNum)
+
+	// Кнопка "Назад"
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", "adminhelp"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+	msg.ReplyMarkup = keyboard
+	_, err := ch.bot.Send(msg)
+	return err
+}
+
 func (ch *CommandHandler) handleExercisesMenu(callbackQuery *tgbotapi.CallbackQuery) error {
 	userID := callbackQuery.From.ID
 
@@ -459,7 +495,6 @@ func (ch *CommandHandler) handleScheduleCustomNotification(callbackQuery *tgbota
 	return err
 }
 
-
 // Остальные методы (HandleHelp, HandleAdmin, etc.) остаются без изменений
 func (ch *CommandHandler) HandleHelp(update tgbotapi.Update) error {
 	userID := update.Message.From.ID
@@ -513,7 +548,7 @@ func (ch *CommandHandler) handleSendAllNotifications(callbackQuery *tgbotapi.Cal
 	}
 
 	// Отправляем сообщение о начале отправки
-	processingMsg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, 
+	processingMsg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID,
 		fmt.Sprintf("⏳ Отправляю уведомление %s всем пользователям...", typeName))
 	_, err := ch.bot.Send(processingMsg)
 	if err != nil {
@@ -536,7 +571,7 @@ func (ch *CommandHandler) handleSendAllNotifications(callbackQuery *tgbotapi.Cal
 	// Генерируем сообщение с помощью AI
 	message, err := ch.notificationService.GenerateNotification(notificationTypeModel)
 	if err != nil {
-		errorMsg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, 
+		errorMsg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID,
 			fmt.Sprintf("❌ Ошибка генерации уведомления: %v", err))
 		ch.bot.Send(errorMsg)
 		return err
@@ -545,7 +580,7 @@ func (ch *CommandHandler) handleSendAllNotifications(callbackQuery *tgbotapi.Cal
 	// Отправляем уведомление всем пользователям
 	err = ch.notificationService.SendNotificationToAll(message)
 	if err != nil {
-		errorMsg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, 
+		errorMsg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID,
 			fmt.Sprintf("❌ Ошибка при отправке уведомления: %v", err))
 		ch.bot.Send(errorMsg)
 		return err
@@ -558,7 +593,7 @@ func (ch *CommandHandler) handleSendAllNotifications(callbackQuery *tgbotapi.Cal
 	confirmText := fmt.Sprintf("✅ Уведомление %s успешно отправлено!\n\n"+
 		"👥 Получателей: %d пользователей\n"+
 		"📤 Статус: Доставлено", typeName, userCount)
-	
+
 	// Добавляем кнопку для просмотра списка получателей
 	kb := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -568,7 +603,7 @@ func (ch *CommandHandler) handleSendAllNotifications(callbackQuery *tgbotapi.Cal
 			tgbotapi.NewInlineKeyboardButtonData("🔙 Назад к уведомлениям", "notifications_menu"),
 		),
 	)
-	
+
 	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, confirmText)
 	msg.ReplyMarkup = kb
 	_, err = ch.bot.Send(msg)
@@ -588,14 +623,14 @@ func (ch *CommandHandler) handleShowRecipients(callbackQuery *tgbotapi.CallbackQ
 	// Получаем список всех активных пользователей
 	users, err := ch.notificationService.GetAllUsers()
 	if err != nil {
-		errorMsg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, 
+		errorMsg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID,
 			fmt.Sprintf("❌ Ошибка получения списка пользователей: %v", err))
 		ch.bot.Send(errorMsg)
 		return err
 	}
 
 	if len(users) == 0 {
-		msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, 
+		msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID,
 			"📋 Список получателей пуст.\n\nНет активных пользователей для отправки уведомлений.")
 		_, err := ch.bot.Send(msg)
 		return err
@@ -603,7 +638,7 @@ func (ch *CommandHandler) handleShowRecipients(callbackQuery *tgbotapi.CallbackQ
 
 	// Формируем список получателей
 	text := fmt.Sprintf("👥 **Получатели уведомлений** (%d пользователей):\n\n", len(users))
-	
+
 	for i, user := range users {
 		// Форматируем username с @ если есть, иначе показываем ID
 		var userDisplay string
@@ -612,7 +647,7 @@ func (ch *CommandHandler) handleShowRecipients(callbackQuery *tgbotapi.CallbackQ
 		} else {
 			userDisplay = fmt.Sprintf("ID: %d", user.UserID)
 		}
-		
+
 		// Добавляем информацию о последней активности
 		lastSeen := user.LastSeen.Format("02.01.2006 15:04")
 		text += fmt.Sprintf("%d. %s\n   📅 Последняя активность: %s\n\n", i+1, userDisplay, lastSeen)
@@ -647,9 +682,122 @@ func (ch *CommandHandler) HandleNotify(update tgbotapi.Update) error {
 
 func (ch *CommandHandler) HandleSetWeek(update tgbotapi.Update) error {
 	userID := update.Message.From.ID
-	text := "⚙️ Команда /setweek временно недоступна"
-	msg := tgbotapi.NewMessage(userID, text)
-	_, err := ch.bot.Send(msg)
+
+	// Проверяем, является ли пользователь администратором
+	if !ch.userManager.IsAdmin(userID) {
+		text := "❌ Эта команда доступна только администраторам."
+		msg := tgbotapi.NewMessage(userID, text)
+		_, err := ch.bot.Send(msg)
+		return err
+	}
+
+	// Получаем аргументы команды
+	args := strings.Fields(update.Message.Text)
+
+	// Если нет аргументов, показываем справку
+	if len(args) == 1 {
+		text := "🗓️ Настройка упражнений недели\n\n" +
+			"Формат команды:\n" +
+			"`/setweek <неделя> <поле> <значение>`\n\n" +
+			"Поля:\n" +
+			"• title - заголовок недели\n" +
+			"• welcome - приветственное сообщение\n" +
+			"• questions - упражнения\n" +
+			"• tips - подсказки\n" +
+			"• insights - инсайт\n" +
+			"• joint - совместные вопросы\n" +
+			"• diary - инструкции для дневника\n" +
+			"• active - открыть/закрыть доступ (true/false)\n\n" +
+			"Примеры:\n" +
+			"`/setweek 1 title Неделя знакомства`\n" +
+			"`/setweek 3 active true` - открыть 3 неделю\n" +
+			"`/setweek 2 active false` - закрыть 2 неделю\n\n" +
+			"⚠️ Изменения применяются сразу для всех пользователей!"
+
+		msg := tgbotapi.NewMessage(userID, text)
+		msg.ParseMode = "Markdown"
+		_, err := ch.bot.Send(msg)
+		return err
+	}
+
+	// Парсим аргументы
+	if len(args) < 3 {
+		text := "❌ Недостаточно аргументов. Используйте: `/setweek <неделя> <поле> <значение>`"
+		msg := tgbotapi.NewMessage(userID, text)
+		msg.ParseMode = "Markdown"
+		_, err := ch.bot.Send(msg)
+		return err
+	}
+
+	weekNum := args[1]
+	field := args[2]
+	value := ""
+	if len(args) > 3 {
+		value = strings.Join(args[3:], " ")
+	}
+
+	// Валидация номера недели
+	week, err := strconv.Atoi(weekNum)
+	if err != nil || week < 1 || week > 4 {
+		text := "❌ Неверный номер недели. Используйте числа от 1 до 4."
+		msg := tgbotapi.NewMessage(userID, text)
+		_, err := ch.bot.Send(msg)
+		return err
+	}
+
+	// Обрабатываем команду
+	var response string
+
+	switch field {
+	case "active":
+		if value != "true" && value != "false" {
+			text := "❌ Для поля active используйте значения true или false\nПример: `/setweek 1 active true`"
+			msg := tgbotapi.NewMessage(userID, text)
+			msg.ParseMode = "Markdown"
+			_, err := ch.bot.Send(msg)
+			return err
+		}
+		// Устанавливаем активность недели через SaveWeekField
+		err := ch.exerciseManager.SaveWeekField(week, field, value)
+		if err != nil {
+			text := fmt.Sprintf("❌ Ошибка при установке активности недели: %v", err)
+			msg := tgbotapi.NewMessage(userID, text)
+			_, err := ch.bot.Send(msg)
+			return err
+		}
+		status := "открыта"
+		if value == "false" {
+			status = "закрыта"
+		}
+		response = fmt.Sprintf("✅ Неделя %d успешно %s для всех пользователей!", week, status)
+
+	case "title", "welcome", "questions", "tips", "insights", "joint", "diary":
+		if value == "" {
+			text := fmt.Sprintf("❌ Укажите значение для поля %s\nПример: `/setweek %d %s <текст>`", field, week, field)
+			msg := tgbotapi.NewMessage(userID, text)
+			msg.ParseMode = "Markdown"
+			_, err := ch.bot.Send(msg)
+			return err
+		}
+		// Устанавливаем значение поля
+		err := ch.exerciseManager.SaveWeekField(week, field, value)
+		if err != nil {
+			text := fmt.Sprintf("❌ Ошибка при установке поля: %v", err)
+			msg := tgbotapi.NewMessage(userID, text)
+			_, err := ch.bot.Send(msg)
+			return err
+		}
+		response = fmt.Sprintf("✅ Поле '%s' для недели %d успешно обновлено!", field, week)
+
+	default:
+		text := "❌ Неизвестное поле. Доступные поля: title, welcome, questions, tips, insights, joint, diary, active"
+		msg := tgbotapi.NewMessage(userID, text)
+		_, err := ch.bot.Send(msg)
+		return err
+	}
+
+	msg := tgbotapi.NewMessage(userID, response)
+	_, err = ch.bot.Send(msg)
 	return err
 }
 

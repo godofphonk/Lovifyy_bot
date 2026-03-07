@@ -35,6 +35,8 @@ func (b *EnterpriseBot) handleCommand(update tgbotapi.Update) error {
 		return b.handleDiaryMode(userID)
 	case "advice":
 		return b.handleExercises(userID)
+	case "setweek":
+		return b.commandHandler.HandleSetWeek(update)
 	case "adminhelp":
 		return b.commandHandler.HandleAdmin(update)
 	case "metrics":
@@ -49,7 +51,7 @@ func (b *EnterpriseBot) handleCommand(update tgbotapi.Update) error {
 // handleMetricsCommand показывает метрики (только для админов)
 func (b *EnterpriseBot) handleMetricsCommand(update tgbotapi.Update) error {
 	userID := update.Message.From.ID
-	
+
 	if !b.userManager.IsAdmin(userID) {
 		msg := tgbotapi.NewMessage(userID, "❌ У вас нет прав для просмотра метрик")
 		_, err := b.telegram.Send(msg)
@@ -110,7 +112,7 @@ func (b *EnterpriseBot) handleUpdateWithMetrics(update tgbotapi.Update) {
 	// Обрабатываем обновление
 	if err := b.processUpdate(update); err != nil {
 		b.logger.WithError(err).Error("Failed to process update")
-		
+
 		if b.metrics != nil {
 			b.metrics.RecordError("update_processing", "general")
 		}

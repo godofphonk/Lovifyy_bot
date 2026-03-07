@@ -30,15 +30,27 @@ func (h *Handler) HandleAdvice(callbackQuery *tgbotapi.CallbackQuery) error {
 	response := "🗓️ Выберите неделю для упражнений:\n\n" +
 		"Каждая неделя содержит специально подобранные упражнения для укрепления ваших отношений."
 
+	// Проверяем активность каждой недели и создаем соответствующие кнопки
+	var buttons []tgbotapi.InlineKeyboardButton
+
+	for week := 1; week <= 4; week++ {
+		if h.exerciseManager.IsWeekActive(week) {
+			// Неделя активна - обычная кнопка
+			buttonText := fmt.Sprintf("%d️⃣ Неделя", week)
+			callbackData := fmt.Sprintf("week_%d", week)
+			buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackData))
+		} else {
+			// Неделя закрыта - кнопка с замком
+			buttonText := fmt.Sprintf("%d️⃣ Неделя 🔒", week)
+			callbackData := fmt.Sprintf("week_%d", week) // все равно обрабатывать, чтобы показать сообщение
+			buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackData))
+		}
+	}
+
+	// Создаем клавиатуру с двумя строками
 	weekKeyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("1️⃣ Неделя", "week_1"),
-			tgbotapi.NewInlineKeyboardButtonData("2️⃣ Неделя", "week_2"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("3️⃣ Неделя", "week_3"),
-			tgbotapi.NewInlineKeyboardButtonData("4️⃣ Неделя", "week_4"),
-		),
+		tgbotapi.NewInlineKeyboardRow(buttons[0], buttons[1]),
+		tgbotapi.NewInlineKeyboardRow(buttons[2], buttons[3]),
 	)
 
 	msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
@@ -49,6 +61,14 @@ func (h *Handler) HandleAdvice(callbackQuery *tgbotapi.CallbackQuery) error {
 
 // HandleWeek обрабатывает выбор недели упражнений как в legacy
 func (h *Handler) HandleWeek(callbackQuery *tgbotapi.CallbackQuery, weekNum int) error {
+	// Проверяем, активна ли неделя
+	if !h.exerciseManager.IsWeekActive(weekNum) {
+		response := fmt.Sprintf("🗓️ %d неделя\n\n🔒 Эта неделя пока недоступна.\n\nАдминистраторы скоро откроют доступ к упражнениям этой недели.", weekNum)
+		msg := tgbotapi.NewMessage(callbackQuery.Message.Chat.ID, response)
+		_, err := h.bot.Send(msg)
+		return err
+	}
+
 	// Получаем упражнения для недели
 	exercise, err := h.exerciseManager.GetWeekExercise(weekNum)
 	if err != nil {
